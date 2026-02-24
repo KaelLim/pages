@@ -8,10 +8,12 @@ const RENDER_SCALE = 1.5;
 const PDF_URL = new URLSearchParams(window.location.search).get('src') || './sample.pdf';
 
 // Page flip sound effect
+let soundEnabled = true;
 const flipSound = (() => {
   const audio = new Audio('./page-flip.mp3');
   audio.volume = 0.5;
   return function play() {
+    if (!soundEnabled) return;
     audio.currentTime = 0;
     audio.play().catch(() => {});
   };
@@ -74,6 +76,7 @@ async function init() {
     let isRtl = false;
     let pageFlip = null;
     let currentPageMap = []; // maps flip index → original page number (0 = blank)
+    let currentShowCover = true;
     let lastSoundTime = 0;
 
     // Build page DOM elements and init StPageFlip
@@ -135,6 +138,7 @@ async function init() {
       //   even total → showCover: true  → cover(Pn) + odd remaining → P1 = back cover
       //   odd total  → showCover: false → all paired, last odd page alone = P1
       const useShowCover = rtl ? (totalBookPages % 2 === 0) : true;
+      currentShowCover = useShowCover;
 
       pageFlip = new St.PageFlip(bookEl, {
         width: fitW,
@@ -199,9 +203,8 @@ async function init() {
       const lw = isRtl ? unreadW : readW;
       const rw = isRtl ? readW : unreadW;
 
-      const inset = 3;
-      const top = rect.top + inset;
-      const h = rect.height - inset * 2;
+      const h = rect.height;
+      const top = rect.top;
 
       edgeLeft.style.cssText = `position:fixed;top:${top}px;height:${h}px;left:${rect.left - lw}px;width:${lw}px`;
       edgeRight.style.cssText = `position:fixed;top:${top}px;height:${h}px;left:${rect.right}px;width:${rw}px`;
@@ -237,6 +240,7 @@ async function init() {
     const btnThumbnail = document.getElementById('btn-thumbnail');
     const btnFullscreen = document.getElementById('btn-fullscreen');
     const btnShare = document.getElementById('btn-share');
+    const btnSound = document.getElementById('btn-sound');
     const btnRtl = document.getElementById('btn-rtl');
 
     // Page slider setup
@@ -250,9 +254,25 @@ async function init() {
     }
 
     function updatePageInfo() {
-      const page = getOriginalPage();
-      pageInfoEl.textContent = `${page} / ${numPages}`;
-      pageSlider.value = page;
+      const idx = pageFlip.getCurrentPageIndex();
+      const total = currentPageMap.length;
+      const page1 = currentPageMap[idx] || 1;
+
+      // Check if current view is a spread (two pages visible)
+      const isSpreadStart = currentShowCover
+        ? (idx > 0 && idx % 2 === 1)
+        : (idx % 2 === 0);
+
+      if (isSpreadStart && idx + 1 < total) {
+        const page2 = currentPageMap[idx + 1];
+        const lo = Math.min(page1, page2);
+        const hi = Math.max(page1, page2);
+        pageInfoEl.textContent = `${lo}-${hi} / ${numPages}`;
+        pageSlider.value = lo;
+      } else {
+        pageInfoEl.textContent = `${page1} / ${numPages}`;
+        pageSlider.value = page1;
+      }
     }
 
     function flipNext() {
@@ -323,9 +343,16 @@ async function init() {
       }
     });
 
+    btnSound.addEventListener('click', () => {
+      soundEnabled = !soundEnabled;
+      btnSound.innerHTML = `<span class="material-symbols-rounded">${soundEnabled ? 'volume_up' : 'volume_off'}</span>`;
+      btnSound.style.background = soundEnabled ? '' : 'rgba(255,255,255,0.25)';
+    });
+
     btnRtl.addEventListener('click', () => {
       const currentOriginalPage = getOriginalPage();
       isRtl = !isRtl;
+      btnRtl.innerHTML = `<span class="material-symbols-rounded">${isRtl ? 'format_textdirection_l_to_r' : 'format_textdirection_r_to_l'}</span>`;
       btnRtl.style.background = isRtl ? 'rgba(255,255,255,0.25)' : '';
 
       buildBook(isRtl, currentOriginalPage);
@@ -401,8 +428,8 @@ async function init() {
         } catch {}
       } else {
         await navigator.clipboard.writeText(shareUrl);
-        btnShare.textContent = '✓';
-        setTimeout(() => { btnShare.innerHTML = '&#x2197;'; }, 1500);
+        btnShare.innerHTML = '<span class="material-symbols-rounded">check</span>';
+        setTimeout(() => { btnShare.innerHTML = '<span class="material-symbols-rounded">share</span>'; }, 1500);
       }
     });
 

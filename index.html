@@ -4,32 +4,54 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PDF Page Flip Demo</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div id="book-area">
     <div id="book"></div>
-    <button id="btn-prev" class="nav-arrow nav-left" title="Previous page">&#x2039;</button>
-    <button id="btn-next" class="nav-arrow nav-right" title="Next page">&#x203A;</button>
-    <button id="btn-first" class="nav-edge nav-edge-left" title="First page">&#x276E;&#x7C;</button>
-    <button id="btn-last" class="nav-edge nav-edge-right" title="Last page">&#x7C;&#x276F;</button>
+    <button id="btn-prev" class="nav-arrow nav-left" title="Previous page">
+      <span class="material-symbols-rounded">chevron_left</span>
+    </button>
+    <button id="btn-next" class="nav-arrow nav-right" title="Next page">
+      <span class="material-symbols-rounded">chevron_right</span>
+    </button>
+    <button id="btn-first" class="nav-edge nav-edge-left" title="First page">
+      <span class="material-symbols-rounded">first_page</span>
+    </button>
+    <button id="btn-last" class="nav-edge nav-edge-right" title="Last page">
+      <span class="material-symbols-rounded">last_page</span>
+    </button>
   </div>
 
   <div id="toolbar">
     <input type="range" id="page-slider" min="1" max="1" value="1" title="Page timeline">
     <span id="page-info">1 / 1</span>
     <div id="toolbar-divider"></div>
-    <button id="btn-thumbnail" title="Thumbnails">&#x2637;</button>
-    <button id="btn-fullscreen" title="Fullscreen">&#x26F6;</button>
-    <button id="btn-share" title="Share">&#x2197;</button>
-    <button id="btn-rtl" title="Toggle RTL">RTL</button>
+    <button id="btn-thumbnail" title="Thumbnails">
+      <span class="material-symbols-rounded">grid_view</span>
+    </button>
+    <button id="btn-fullscreen" title="Fullscreen">
+      <span class="material-symbols-rounded">fullscreen</span>
+    </button>
+    <button id="btn-sound" title="Toggle sound">
+      <span class="material-symbols-rounded">volume_up</span>
+    </button>
+    <button id="btn-share" title="Share">
+      <span class="material-symbols-rounded">share</span>
+    </button>
+    <button id="btn-rtl" title="Toggle RTL">
+      <span class="material-symbols-rounded">format_textdirection_r_to_l</span>
+    </button>
   </div>
 
   <!-- Thumbnail overlay -->
   <div id="thumbnail-overlay" class="hidden">
     <div id="thumbnail-header">
       <span>Pages</span>
-      <button id="btn-thumb-close">&times;</button>
+      <button id="btn-thumb-close">
+        <span class="material-symbols-rounded">close</span>
+      </button>
     </div>
     <div id="thumbnail-grid"></div>
   </div>

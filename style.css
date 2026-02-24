@@ -21,6 +21,7 @@ body {
   align-items: center;
   min-height: 0;
   position: relative;
+  padding-top: 12px;
 }
 
 #book {
@@ -61,11 +62,14 @@ body {
   background: none;
   border: none;
   color: rgba(255, 255, 255, 0.5);
-  font-size: 2.5rem;
   cursor: pointer;
-  padding: 16px 12px;
+  padding: 12px 4px;
   transition: color 0.2s;
   z-index: 20;
+}
+
+.nav-arrow .material-symbols-rounded {
+  font-size: 2.5rem;
 }
 
 .nav-arrow:hover {
@@ -88,11 +92,14 @@ body {
   background: none;
   border: none;
   color: rgba(255, 255, 255, 0.4);
-  font-size: 0.85rem;
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 4px;
   transition: color 0.2s;
   z-index: 20;
+}
+
+.nav-edge .material-symbols-rounded {
+  font-size: 1.2rem;
 }
 
 .nav-edge:hover {
@@ -113,25 +120,57 @@ body {
   position: fixed;
   pointer-events: none;
   z-index: 10;
-  background: repeating-linear-gradient(
-    90deg,
-    #e8e3d8 0px,
-    #e8e3d8 1.5px,
-    #9a9488 1.5px,
-    #9a9488 2px
-  );
+  background:
+    linear-gradient(to bottom,
+      rgba(0,0,0,0.3) 0%,
+      rgba(0,0,0,0.06) 20%,
+      rgba(255,255,255,0.1) 50%,
+      rgba(0,0,0,0.06) 80%,
+      rgba(0,0,0,0.3) 100%
+    ),
+    repeating-linear-gradient(
+      90deg,
+      #e8e3d8 0px,
+      #e8e3d8 1.5px,
+      #9a9488 1.5px,
+      #9a9488 2px
+    );
 }
 
 .book-edge-left {
-  border-radius: 2px 0 0 2px;
-  box-shadow: -1px 0 2px rgba(0,0,0,0.12),
-              inset -2px 0 4px rgba(0,0,0,0.08);
+  clip-path: polygon(
+    100% 0%,
+    90% 0%,
+    60% 1%,
+    30% 2.5%,
+    10% 4%,
+    0% 6%,
+    0% 94%,
+    10% 96%,
+    30% 97.5%,
+    60% 99%,
+    90% 100%,
+    100% 100%
+  );
+  filter: drop-shadow(-1px 0 1px rgba(0,0,0,0.2));
 }
 
 .book-edge-right {
-  border-radius: 0 2px 2px 0;
-  box-shadow: 1px 0 2px rgba(0,0,0,0.12),
-              inset 2px 0 4px rgba(0,0,0,0.08);
+  clip-path: polygon(
+    0% 0%,
+    10% 0%,
+    40% 1%,
+    70% 2.5%,
+    90% 4%,
+    100% 6%,
+    100% 94%,
+    90% 96%,
+    70% 97.5%,
+    40% 99%,
+    10% 100%,
+    0% 100%
+  );
+  filter: drop-shadow(1px 0 1px rgba(0,0,0,0.2));
 }
 
 /* ── Loading ── */
