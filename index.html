@@ -22,14 +22,28 @@
     <button id="btn-last" class="nav-edge nav-edge-right" title="Last page">
       <span class="material-symbols-rounded">last_page</span>
     </button>
+    <button id="btn-zoom-close" class="zoom-close hidden" title="Exit zoom">
+      <span class="material-symbols-rounded">fit_screen</span>
+    </button>
   </div>
 
   <div id="toolbar">
     <input type="range" id="page-slider" min="1" max="1" value="1" title="Page timeline">
     <span id="page-info">1 / 1</span>
     <div id="toolbar-divider"></div>
+    <button id="btn-zoom-out" title="Zoom out">
+      <span class="material-symbols-rounded">zoom_out</span>
+    </button>
+    <span id="zoom-info">100%</span>
+    <button id="btn-zoom-in" title="Zoom in">
+      <span class="material-symbols-rounded">zoom_in</span>
+    </button>
+    <div id="toolbar-divider"></div>
     <button id="btn-thumbnail" title="Thumbnails">
       <span class="material-symbols-rounded">grid_view</span>
+    </button>
+    <button id="btn-page-mode" title="Single page">
+      <span class="material-symbols-rounded">article</span>
     </button>
     <button id="btn-fullscreen" title="Fullscreen">
       <span class="material-symbols-rounded">fullscreen</span>

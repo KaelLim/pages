@@ -78,13 +78,25 @@ async function init() {
     let currentPageMap = []; // maps flip index → original page number (0 = blank)
     let currentShowCover = true;
     let lastSoundTime = 0;
+    let edgesFrozen = false;
+    let isSinglePage = false;
 
     // Build page DOM elements and init StPageFlip
-    function buildBook(rtl, targetOriginalPage) {
+    function buildBook(rtl, targetOriginalPage, mouseEvents = true) {
+      // Destroy old instance to remove window-level event listeners
+      const parentEl = bookEl.parentNode;
+      if (pageFlip) {
+        try { pageFlip.destroy(); } catch {}
+      }
+
       // Replace the container entirely to avoid stale state
       const newBookEl = document.createElement('div');
       newBookEl.id = 'book';
-      bookEl.parentNode.replaceChild(newBookEl, bookEl);
+      if (bookEl.parentNode) {
+        bookEl.parentNode.replaceChild(newBookEl, bookEl);
+      } else {
+        parentEl.appendChild(newBookEl);
+      }
       bookEl = newBookEl;
 
       // Build page list: [P1, P2, ..., Pn]
@@ -117,16 +129,25 @@ async function init() {
       // (prevents StPageFlip container vs page size mismatch)
       const bookArea = document.getElementById('book-area');
       const aspectRatio = pageWidth / pageHeight;
-      const viewW = bookArea.clientWidth;
-      const viewH = bookArea.clientHeight;
+      const areaStyle = getComputedStyle(bookArea);
+      const viewW = bookArea.clientWidth - parseFloat(areaStyle.paddingLeft) - parseFloat(areaStyle.paddingRight);
+      const viewH = bookArea.clientHeight - parseFloat(areaStyle.paddingTop) - parseFloat(areaStyle.paddingBottom);
 
       let fitW = Math.round(viewH * aspectRatio);
       let fitH = viewH;
 
-      // If two pages exceed viewport width, constrain by width instead
-      if (fitW * 2 > viewW) {
-        fitW = Math.floor(viewW / 2);
-        fitH = Math.round(fitW / aspectRatio);
+      if (isSinglePage) {
+        // Single page: fit one page to viewport
+        if (fitW > viewW) {
+          fitW = viewW;
+          fitH = Math.round(fitW / aspectRatio);
+        }
+      } else {
+        // Double page: fit two pages to viewport
+        if (fitW * 2 > viewW) {
+          fitW = Math.floor(viewW / 2);
+          fitH = Math.round(fitW / aspectRatio);
+        }
       }
 
       // Never exceed original canvas resolution (no upscaling)
@@ -140,17 +161,27 @@ async function init() {
       const useShowCover = rtl ? (totalBookPages % 2 === 0) : true;
       currentShowCover = useShowCover;
 
+      // Single page: use fixed size and constrain container to one page width
+      // so StPageFlip auto-switches to portrait mode
+      if (isSinglePage) {
+        bookEl.style.width = fitW + 'px';
+        bookEl.style.maxWidth = fitW + 'px';
+        bookEl.style.height = fitH + 'px';
+      }
+
       pageFlip = new St.PageFlip(bookEl, {
         width: fitW,
         height: fitH,
-        size: 'stretch',
+        size: isSinglePage ? 'fixed' : 'stretch',
         maxWidth: fitW,
         maxHeight: fitH,
         flippingTime: 450,
         maxShadowOpacity: 0.3,
         showCover: useShowCover,
         mobileScrollSupport: false,
-        autoSize: true,
+        autoSize: !isSinglePage,
+        usePortrait: true,
+        useMouseEvents: mouseEvents,
         startPage: targetOriginalPage !== undefined
           ? currentPageMap.indexOf(targetOriginalPage)
           : (rtl ? totalBookPages - 1 : 0),
@@ -170,6 +201,7 @@ async function init() {
       });
       pageFlip.on('changeState', (e) => {
         if (e.data === 'read') {
+          edgesFrozen = false;
           updatePageEdges();
         }
       });
@@ -187,6 +219,13 @@ async function init() {
     document.body.appendChild(edgeRight);
 
     function updatePageEdges(overrideIdx) {
+      if (zoomLevel > 1 || edgesFrozen) {
+        edgeLeft.style.display = 'none';
+        edgeRight.style.display = 'none';
+        return;
+      }
+      edgeLeft.style.display = '';
+      edgeRight.style.display = '';
       const block = document.querySelector('.stf__block');
       if (!block || !pageFlip) return;
 
@@ -217,7 +256,9 @@ async function init() {
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
         const currentOriginalPage = getOriginalPage();
+        zoomLevel = 1; panX = 0; panY = 0;
         buildBook(isRtl, currentOriginalPage);
+        applyZoom();
         updatePageInfo();
         loadingEl.classList.add('hidden');
       }, 200);
@@ -238,10 +279,110 @@ async function init() {
     const btnFirst = document.getElementById('btn-first');
     const btnLast = document.getElementById('btn-last');
     const btnThumbnail = document.getElementById('btn-thumbnail');
+    const btnPageMode = document.getElementById('btn-page-mode');
     const btnFullscreen = document.getElementById('btn-fullscreen');
     const btnShare = document.getElementById('btn-share');
     const btnSound = document.getElementById('btn-sound');
+    const btnZoomIn = document.getElementById('btn-zoom-in');
+    const btnZoomOut = document.getElementById('btn-zoom-out');
+    const btnZoomClose = document.getElementById('btn-zoom-close');
+    const zoomInfoEl = document.getElementById('zoom-info');
+    const bookArea = document.getElementById('book-area');
     const btnRtl = document.getElementById('btn-rtl');
+
+    // Zoom & pan state
+    let zoomLevel = 1;
+    let panX = 0, panY = 0;
+    let isPanning = false;
+    let panStartX = 0, panStartY = 0;
+    const ZOOM_STEP = 0.1;
+    const ZOOM_MIN = 0.5;
+    const ZOOM_MAX = 3.0;
+
+    function applyZoom() {
+      const isZoomed = zoomLevel > 1;
+      const wasZoomed = bookArea.classList.contains('zoom-mode');
+
+      // Rebuild PageFlip only when crossing the 100% threshold
+      if (isZoomed !== wasZoomed) {
+        const currentOriginalPage = getOriginalPage();
+        buildBook(isRtl, currentOriginalPage, !isZoomed);
+        updatePageInfo();
+      }
+
+      // Reset pan when not zoomed in
+      if (!isZoomed) { panX = 0; panY = 0; }
+
+      // Apply transform
+      if (isZoomed) {
+        bookEl.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomLevel})`;
+      } else if (zoomLevel < 1) {
+        bookEl.style.transform = `scale(${zoomLevel})`;
+      } else {
+        bookEl.style.transform = '';
+      }
+
+      zoomInfoEl.textContent = `${Math.round(zoomLevel * 100)}%`;
+
+      bookArea.classList.toggle('zoom-mode', isZoomed);
+      btnZoomClose.classList.toggle('hidden', !isZoomed);
+
+      // Hide nav & edges when zoomed in
+      const navDisplay = isZoomed ? 'none' : '';
+      btnPrev.style.display = navDisplay;
+      btnNext.style.display = navDisplay;
+      btnFirst.style.display = navDisplay;
+      btnLast.style.display = navDisplay;
+      edgeLeft.style.display = navDisplay;
+      edgeRight.style.display = navDisplay;
+
+      if (!isZoomed) {
+        requestAnimationFrame(() => updatePageEdges());
+      }
+    }
+
+    function resetZoom() {
+      zoomLevel = 1;
+      panX = 0;
+      panY = 0;
+      applyZoom();
+    }
+
+    btnZoomIn.addEventListener('click', () => {
+      if (zoomLevel < ZOOM_MAX) {
+        zoomLevel = Math.min(ZOOM_MAX, +(zoomLevel + ZOOM_STEP).toFixed(1));
+        applyZoom();
+      }
+    });
+
+    btnZoomOut.addEventListener('click', () => {
+      if (zoomLevel > ZOOM_MIN) {
+        zoomLevel = Math.max(ZOOM_MIN, +(zoomLevel - ZOOM_STEP).toFixed(1));
+        applyZoom();
+      }
+    });
+
+    btnZoomClose.addEventListener('click', resetZoom);
+
+    // Pan drag (only when zoomed in)
+    bookArea.addEventListener('mousedown', (e) => {
+      if (zoomLevel <= 1) return;
+      isPanning = true;
+      panStartX = e.clientX - panX;
+      panStartY = e.clientY - panY;
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isPanning) return;
+      panX = e.clientX - panStartX;
+      panY = e.clientY - panStartY;
+      bookEl.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomLevel})`;
+    });
+
+    document.addEventListener('mouseup', () => {
+      isPanning = false;
+    });
 
     // Page slider setup
     pageSlider.min = 1;
@@ -289,39 +430,20 @@ async function init() {
 
     function goFirst() {
       const targetIdx = isRtl ? currentPageMap.length - 1 : 0;
-      const current = pageFlip.getCurrentPageIndex();
-      if (current === targetIdx) return;
-
-      if (Math.abs(current - targetIdx) <= 2) {
-        flipPrev();
-        return;
-      }
-
-      // Jump to one spread before target, then immediately flip
-      const nearIdx = isRtl
-        ? Math.max(0, targetIdx - 2)
-        : Math.min(currentPageMap.length - 1, targetIdx + 2);
-      pageFlip.turnToPage(nearIdx);
-      flipPrev();
-      updatePageEdges(targetIdx);
+      if (pageFlip.getCurrentPageIndex() === targetIdx) return;
+      edgesFrozen = true;
+      flipSound();
+      lastSoundTime = Date.now();
+      pageFlip.flip(targetIdx);
     }
 
     function goLast() {
       const targetIdx = isRtl ? 0 : currentPageMap.length - 1;
-      const current = pageFlip.getCurrentPageIndex();
-      if (current === targetIdx) return;
-
-      if (Math.abs(current - targetIdx) <= 2) {
-        flipNext();
-        return;
-      }
-
-      const nearIdx = isRtl
-        ? Math.min(currentPageMap.length - 1, targetIdx + 2)
-        : Math.max(0, targetIdx - 2);
-      pageFlip.turnToPage(nearIdx);
-      flipNext();
-      updatePageEdges(targetIdx);
+      if (pageFlip.getCurrentPageIndex() === targetIdx) return;
+      edgesFrozen = true;
+      flipSound();
+      lastSoundTime = Date.now();
+      pageFlip.flip(targetIdx);
     }
 
     updatePageInfo();
@@ -332,7 +454,7 @@ async function init() {
     btnFirst.addEventListener('click', () => goFirst());
     btnLast.addEventListener('click', () => goLast());
 
-    // Page slider: jump to page on input
+    // Page slider: instant jump while dragging, sound on release
     pageSlider.addEventListener('input', () => {
       const targetPage = parseInt(pageSlider.value);
       const targetIdx = currentPageMap.indexOf(targetPage);
@@ -341,6 +463,9 @@ async function init() {
         updatePageEdges(targetIdx);
         updatePageInfo();
       }
+    });
+    pageSlider.addEventListener('change', () => {
+      flipSound();
     });
 
     btnSound.addEventListener('click', () => {
@@ -355,7 +480,21 @@ async function init() {
       btnRtl.innerHTML = `<span class="material-symbols-rounded">${isRtl ? 'format_textdirection_l_to_r' : 'format_textdirection_r_to_l'}</span>`;
       btnRtl.style.background = isRtl ? 'rgba(255,255,255,0.25)' : '';
 
+      zoomLevel = 1; panX = 0; panY = 0;
       buildBook(isRtl, currentOriginalPage);
+      applyZoom();
+      buildThumbnails();
+      updatePageInfo();
+    });
+
+    btnPageMode.addEventListener('click', () => {
+      const currentOriginalPage = getOriginalPage();
+      isSinglePage = !isSinglePage;
+      btnPageMode.innerHTML = `<span class="material-symbols-rounded">${isSinglePage ? 'menu_book' : 'article'}</span>`;
+      btnPageMode.style.background = isSinglePage ? 'rgba(255,255,255,0.25)' : '';
+      zoomLevel = 1; panX = 0; panY = 0;
+      buildBook(isRtl, currentOriginalPage);
+      applyZoom();
       updatePageInfo();
     });
 
@@ -372,38 +511,66 @@ async function init() {
     const thumbGrid = document.getElementById('thumbnail-grid');
     const btnThumbClose = document.getElementById('btn-thumb-close');
 
-    // Build thumbnail grid once
-    for (let i = 0; i < pageImages.length; i++) {
+    function buildThumbnails() {
+      thumbGrid.innerHTML = '';
+      const total = currentPageMap.length;
+      let i = 0;
+
+      // Cover is single when showCover is true
+      if (currentShowCover && total > 0) {
+        addThumbItem([currentPageMap[0]], 0);
+        i = 1;
+      }
+
+      // Pair remaining pages as spreads
+      while (i < total) {
+        if (i + 1 < total) {
+          addThumbItem([currentPageMap[i], currentPageMap[i + 1]], i);
+          i += 2;
+        } else {
+          addThumbItem([currentPageMap[i]], i);
+          i++;
+        }
+      }
+    }
+
+    function addThumbItem(pages, flipIdx) {
       const item = document.createElement('div');
       item.className = 'thumb-item';
-      item.dataset.page = i + 1;
+      item.dataset.pages = pages.join(',');
 
-      const img = document.createElement('img');
-      img.src = pageImages[i].dataUrl;
-      item.appendChild(img);
+      const imgWrap = document.createElement('div');
+      imgWrap.className = pages.length === 1 ? 'thumb-single' : 'thumb-spread';
+      for (const pageNum of pages) {
+        const img = document.createElement('img');
+        img.src = pageImages[pageNum - 1].dataUrl;
+        imgWrap.appendChild(img);
+      }
+      item.appendChild(imgWrap);
 
       const label = document.createElement('div');
       label.className = 'thumb-label';
-      label.textContent = i + 1;
+      const sorted = [...pages].sort((a, b) => a - b);
+      label.textContent = sorted.length > 1 ? `${sorted[0]}-${sorted[1]}` : sorted[0];
       item.appendChild(label);
 
       item.addEventListener('click', () => {
-        const targetIdx = currentPageMap.indexOf(i + 1);
-        if (targetIdx >= 0) {
-          pageFlip.turnToPage(targetIdx);
-          updatePageEdges(targetIdx);
-          updatePageInfo();
-        }
+        pageFlip.turnToPage(flipIdx);
+        updatePageEdges(flipIdx);
+        updatePageInfo();
         thumbOverlay.classList.add('hidden');
       });
 
       thumbGrid.appendChild(item);
     }
 
+    buildThumbnails();
+
     function updateThumbnailActive() {
-      const current = getOriginalPage();
+      const currentPage = String(getOriginalPage());
       thumbGrid.querySelectorAll('.thumb-item').forEach(el => {
-        el.classList.toggle('active', parseInt(el.dataset.page) === current);
+        const pages = el.dataset.pages.split(',');
+        el.classList.toggle('active', pages.includes(currentPage));
       });
     }
 
@@ -440,10 +607,31 @@ async function init() {
         if (e.key === 'Escape') thumbOverlay.classList.add('hidden');
         return;
       }
-      if (e.key === 'ArrowRight') flipNext();
-      if (e.key === 'ArrowLeft') flipPrev();
-      if (e.key === 'Home') goFirst();
-      if (e.key === 'End') goLast();
+      // Escape exits zoom mode
+      if (e.key === 'Escape' && zoomLevel > 1) {
+        resetZoom();
+        return;
+      }
+      // Zoom shortcuts
+      if ((e.key === '=' || e.key === '+') && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        btnZoomIn.click();
+      }
+      if (e.key === '-' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        btnZoomOut.click();
+      }
+      if (e.key === '0' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        resetZoom();
+      }
+      // Page navigation only when not zoomed in
+      if (zoomLevel <= 1) {
+        if (e.key === 'ArrowRight') flipNext();
+        if (e.key === 'ArrowLeft') flipPrev();
+        if (e.key === 'Home') goFirst();
+        if (e.key === 'End') goLast();
+      }
     });
   } catch (err) {
     loadingEl.textContent = `Error: ${err.message}`;
