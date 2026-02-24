@@ -7,6 +7,16 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
 const RENDER_SCALE = 1.5;
 const PDF_URL = new URLSearchParams(window.location.search).get('src') || './sample.pdf';
 
+// Page flip sound effect
+const flipSound = (() => {
+  const audio = new Audio('./page-flip.mp3');
+  audio.volume = 0.5;
+  return function play() {
+    audio.currentTime = 0;
+    audio.play().catch(() => {});
+  };
+})();
+
 async function renderPageToImage(pdf, pageNum) {
   const page = await pdf.getPage(pageNum);
   const viewport = page.getViewport({ scale: RENDER_SCALE });
@@ -64,6 +74,7 @@ async function init() {
     let isRtl = false;
     let pageFlip = null;
     let currentPageMap = []; // maps flip index → original page number (0 = blank)
+    let lastSoundTime = 0;
 
     // Build page DOM elements and init StPageFlip
     function buildBook(rtl, targetOriginalPage) {
@@ -99,11 +110,12 @@ async function init() {
 
       const totalBookPages = entries.length;
 
-      // Calculate page dimensions that fit the actual viewport
+      // Calculate page dimensions that fit the book area
       // (prevents StPageFlip container vs page size mismatch)
+      const bookArea = document.getElementById('book-area');
       const aspectRatio = pageWidth / pageHeight;
-      const viewW = window.innerWidth;
-      const viewH = window.innerHeight;
+      const viewW = bookArea.clientWidth;
+      const viewH = bookArea.clientHeight;
 
       let fitW = Math.round(viewH * aspectRatio);
       let fitH = viewH;
@@ -141,9 +153,14 @@ async function init() {
       });
       pageFlip.loadFromHTML(bookEl.querySelectorAll('.page'));
       pageFlip.on('flip', () => {
+        // Play sound for drag flips (debounced to avoid double with button flips)
+        const now = Date.now();
+        if (now - lastSoundTime > 500) {
+          flipSound();
+          lastSoundTime = now;
+        }
         updatePageInfo();
       });
-      // Update edges to target position as soon as flip starts
       pageFlip.on('flipping', (e) => {
         updatePageEdges(e.data);
       });
@@ -209,13 +226,23 @@ async function init() {
     // 5. Hide loading indicator
     loadingEl.classList.add('hidden');
 
-    // 6. Toolbar controls
+    // 6. Controls
     const toolbar = document.getElementById('toolbar');
     const pageInfoEl = document.getElementById('page-info');
+    const pageSlider = document.getElementById('page-slider');
     const btnPrev = document.getElementById('btn-prev');
     const btnNext = document.getElementById('btn-next');
+    const btnFirst = document.getElementById('btn-first');
+    const btnLast = document.getElementById('btn-last');
+    const btnThumbnail = document.getElementById('btn-thumbnail');
     const btnFullscreen = document.getElementById('btn-fullscreen');
+    const btnShare = document.getElementById('btn-share');
     const btnRtl = document.getElementById('btn-rtl');
+
+    // Page slider setup
+    pageSlider.min = 1;
+    pageSlider.max = numPages;
+    pageSlider.value = 1;
 
     function getOriginalPage() {
       const idx = pageFlip.getCurrentPageIndex();
@@ -223,15 +250,58 @@ async function init() {
     }
 
     function updatePageInfo() {
-      pageInfoEl.textContent = `${getOriginalPage()} / ${numPages}`;
+      const page = getOriginalPage();
+      pageInfoEl.textContent = `${page} / ${numPages}`;
+      pageSlider.value = page;
     }
 
     function flipNext() {
+      flipSound();
+      lastSoundTime = Date.now();
       isRtl ? pageFlip.flipPrev() : pageFlip.flipNext();
     }
 
     function flipPrev() {
+      flipSound();
+      lastSoundTime = Date.now();
       isRtl ? pageFlip.flipNext() : pageFlip.flipPrev();
+    }
+
+    function goFirst() {
+      const targetIdx = isRtl ? currentPageMap.length - 1 : 0;
+      const current = pageFlip.getCurrentPageIndex();
+      if (current === targetIdx) return;
+
+      if (Math.abs(current - targetIdx) <= 2) {
+        flipPrev();
+        return;
+      }
+
+      // Jump to one spread before target, then immediately flip
+      const nearIdx = isRtl
+        ? Math.max(0, targetIdx - 2)
+        : Math.min(currentPageMap.length - 1, targetIdx + 2);
+      pageFlip.turnToPage(nearIdx);
+      flipPrev();
+      updatePageEdges(targetIdx);
+    }
+
+    function goLast() {
+      const targetIdx = isRtl ? 0 : currentPageMap.length - 1;
+      const current = pageFlip.getCurrentPageIndex();
+      if (current === targetIdx) return;
+
+      if (Math.abs(current - targetIdx) <= 2) {
+        flipNext();
+        return;
+      }
+
+      const nearIdx = isRtl
+        ? Math.min(currentPageMap.length - 1, targetIdx + 2)
+        : Math.max(0, targetIdx - 2);
+      pageFlip.turnToPage(nearIdx);
+      flipNext();
+      updatePageEdges(targetIdx);
     }
 
     updatePageInfo();
@@ -239,6 +309,19 @@ async function init() {
 
     btnPrev.addEventListener('click', () => flipPrev());
     btnNext.addEventListener('click', () => flipNext());
+    btnFirst.addEventListener('click', () => goFirst());
+    btnLast.addEventListener('click', () => goLast());
+
+    // Page slider: jump to page on input
+    pageSlider.addEventListener('input', () => {
+      const targetPage = parseInt(pageSlider.value);
+      const targetIdx = currentPageMap.indexOf(targetPage);
+      if (targetIdx >= 0) {
+        pageFlip.turnToPage(targetIdx);
+        updatePageEdges(targetIdx);
+        updatePageInfo();
+      }
+    });
 
     btnRtl.addEventListener('click', () => {
       const currentOriginalPage = getOriginalPage();
@@ -257,10 +340,83 @@ async function init() {
       }
     });
 
+    // Thumbnail overlay
+    const thumbOverlay = document.getElementById('thumbnail-overlay');
+    const thumbGrid = document.getElementById('thumbnail-grid');
+    const btnThumbClose = document.getElementById('btn-thumb-close');
+
+    // Build thumbnail grid once
+    for (let i = 0; i < pageImages.length; i++) {
+      const item = document.createElement('div');
+      item.className = 'thumb-item';
+      item.dataset.page = i + 1;
+
+      const img = document.createElement('img');
+      img.src = pageImages[i].dataUrl;
+      item.appendChild(img);
+
+      const label = document.createElement('div');
+      label.className = 'thumb-label';
+      label.textContent = i + 1;
+      item.appendChild(label);
+
+      item.addEventListener('click', () => {
+        const targetIdx = currentPageMap.indexOf(i + 1);
+        if (targetIdx >= 0) {
+          pageFlip.turnToPage(targetIdx);
+          updatePageEdges(targetIdx);
+          updatePageInfo();
+        }
+        thumbOverlay.classList.add('hidden');
+      });
+
+      thumbGrid.appendChild(item);
+    }
+
+    function updateThumbnailActive() {
+      const current = getOriginalPage();
+      thumbGrid.querySelectorAll('.thumb-item').forEach(el => {
+        el.classList.toggle('active', parseInt(el.dataset.page) === current);
+      });
+    }
+
+    btnThumbnail.addEventListener('click', () => {
+      updateThumbnailActive();
+      thumbOverlay.classList.toggle('hidden');
+      // Scroll active thumbnail into view
+      const active = thumbGrid.querySelector('.thumb-item.active');
+      if (active) active.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+
+    btnThumbClose.addEventListener('click', () => {
+      thumbOverlay.classList.add('hidden');
+    });
+
+    // Share
+    btnShare.addEventListener('click', async () => {
+      const shareUrl = window.location.href;
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: document.title, url: shareUrl });
+        } catch {}
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+        btnShare.textContent = '✓';
+        setTimeout(() => { btnShare.innerHTML = '&#x2197;'; }, 1500);
+      }
+    });
+
     // 7. Arrow key navigation
     document.addEventListener('keydown', (e) => {
+      // Ignore if thumbnail overlay is open
+      if (!thumbOverlay.classList.contains('hidden')) {
+        if (e.key === 'Escape') thumbOverlay.classList.add('hidden');
+        return;
+      }
       if (e.key === 'ArrowRight') flipNext();
       if (e.key === 'ArrowLeft') flipPrev();
+      if (e.key === 'Home') goFirst();
+      if (e.key === 'End') goLast();
     });
   } catch (err) {
     loadingEl.textContent = `Error: ${err.message}`;

@@ -7,16 +7,34 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="book"></div>
-  <div id="loading">Loading PDF...</div>
+  <div id="book-area">
+    <div id="book"></div>
+    <button id="btn-prev" class="nav-arrow nav-left" title="Previous page">&#x2039;</button>
+    <button id="btn-next" class="nav-arrow nav-right" title="Next page">&#x203A;</button>
+    <button id="btn-first" class="nav-edge nav-edge-left" title="First page">&#x276E;&#x7C;</button>
+    <button id="btn-last" class="nav-edge nav-edge-right" title="Last page">&#x7C;&#x276F;</button>
+  </div>
 
   <div id="toolbar">
-    <button id="btn-prev" title="Previous page">&#x276E;&#x276E;</button>
+    <input type="range" id="page-slider" min="1" max="1" value="1" title="Page timeline">
     <span id="page-info">1 / 1</span>
-    <button id="btn-next" title="Next page">&#x276F;&#x276F;</button>
+    <div id="toolbar-divider"></div>
+    <button id="btn-thumbnail" title="Thumbnails">&#x2637;</button>
     <button id="btn-fullscreen" title="Fullscreen">&#x26F6;</button>
+    <button id="btn-share" title="Share">&#x2197;</button>
     <button id="btn-rtl" title="Toggle RTL">RTL</button>
   </div>
+
+  <!-- Thumbnail overlay -->
+  <div id="thumbnail-overlay" class="hidden">
+    <div id="thumbnail-header">
+      <span>Pages</span>
+      <button id="btn-thumb-close">&times;</button>
+    </div>
+    <div id="thumbnail-grid"></div>
+  </div>
+
+  <div id="loading">Loading PDF...</div>
 
   <!-- StPageFlip (UMD, exposes St.PageFlip globally) -->
   <script src="https://unpkg.com/page-flip@2.0.7/dist/js/page-flip.browser.js"></script>
