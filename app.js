@@ -66,7 +66,7 @@ async function init() {
     let currentPageMap = []; // maps flip index → original page number (0 = blank)
 
     // Build page DOM elements and init StPageFlip
-    function buildBook(rtl) {
+    function buildBook(rtl, targetOriginalPage) {
       // Replace the container entirely to avoid stale state
       const newBookEl = document.createElement('div');
       newBookEl.id = 'book';
@@ -118,6 +118,12 @@ async function init() {
       fitW = Math.min(fitW, pageWidth);
       fitH = Math.min(fitH, pageHeight);
 
+      // RTL: P1 is at the end of reversed entries and must display alone.
+      // showCover always treats index 0 as cover. For RTL, P1 is alone when:
+      //   even total → showCover: true  → cover(Pn) + odd remaining → P1 = back cover
+      //   odd total  → showCover: false → all paired, last odd page alone = P1
+      const useShowCover = rtl ? (totalBookPages % 2 === 0) : true;
+
       pageFlip = new St.PageFlip(bookEl, {
         width: fitW,
         height: fitH,
@@ -126,10 +132,12 @@ async function init() {
         maxHeight: fitH,
         flippingTime: 450,
         maxShadowOpacity: 0.3,
-        showCover: true,
+        showCover: useShowCover,
         mobileScrollSupport: false,
         autoSize: true,
-        startPage: rtl ? totalBookPages - 1 : 0,
+        startPage: targetOriginalPage !== undefined
+          ? currentPageMap.indexOf(targetOriginalPage)
+          : (rtl ? totalBookPages - 1 : 0),
       });
       pageFlip.loadFromHTML(bookEl.querySelectorAll('.page'));
       pageFlip.on('flip', () => {
@@ -164,7 +172,7 @@ async function init() {
       const rect = block.getBoundingClientRect();
       const idx = overrideIdx !== undefined ? overrideIdx : pageFlip.getCurrentPageIndex();
       const total = currentPageMap.length;
-      const maxEdge = Math.min(Math.ceil(numPages / 5), 14);
+      const maxEdge = Math.min(Math.ceil(numPages / 4), 20);
 
       let readProgress = idx / Math.max(total - 1, 1);
       if (isRtl) readProgress = 1 - readProgress;
@@ -182,7 +190,18 @@ async function init() {
       edgeRight.style.cssText = `position:fixed;top:${top}px;height:${h}px;left:${rect.right}px;width:${rw}px`;
     }
 
-    window.addEventListener('resize', () => requestAnimationFrame(updatePageEdges));
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+      loadingEl.textContent = 'Resizing...';
+      loadingEl.classList.remove('hidden');
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        const currentOriginalPage = getOriginalPage();
+        buildBook(isRtl, currentOriginalPage);
+        updatePageInfo();
+        loadingEl.classList.add('hidden');
+      }, 200);
+    });
 
     // 4. Build initial book (LTR)
     buildBook(false);
@@ -226,12 +245,7 @@ async function init() {
       isRtl = !isRtl;
       btnRtl.style.background = isRtl ? 'rgba(255,255,255,0.25)' : '';
 
-      buildBook(isRtl);
-
-      // Navigate to the same original page in the new layout
-      let newIndex = currentPageMap.indexOf(currentOriginalPage);
-      if (newIndex < 0) newIndex = 0;
-      pageFlip.turnToPage(newIndex);
+      buildBook(isRtl, currentOriginalPage);
       updatePageInfo();
     });
 

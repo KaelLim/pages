@@ -200,6 +200,41 @@ function updatePageEdges(overrideIdx) {
 
 ---
 
+### 2026-02-24: RTL 模式封面顯示為 spread 而非單獨頁面
+
+#### 問題現象
+
+切換 RTL 後，P1 無法單獨顯示，直接與 P2 組成 spread。
+
+#### 根本原因
+
+`showCover: true` 永遠將 **index 0** 視為封面（單獨顯示）。RTL 反轉後 index 0 是 Pn（最後一頁），P1 位於陣列末端。P1 能否單獨顯示取決於 StPageFlip 的 `createSpread` 配對邏輯：
+
+- **封面後剩餘頁數為奇數** → 最後一頁獨立為封底 ✓
+- **封面後剩餘頁數為偶數** → 全部配對，最後一頁被併入 spread ✗
+
+以 69 頁為例：`showCover: true` → 封面(P69) + 68 頁剩餘（偶數）→ 全配對 → P1 與 P2 併成 spread。
+
+#### 修復方式
+
+根據 RTL 模式和頁數奇偶**動態切換 `showCover`**，確保 P1 在任何頁數下都能單獨顯示，不需要 blank page：
+
+```javascript
+const useShowCover = rtl ? (totalBookPages % 2 === 0) : true;
+```
+
+| 模式 | 頁數 | showCover | P1 結果 |
+|------|------|-----------|---------|
+| LTR | 任何 | `true` | index 0 = 封面，單獨顯示 |
+| RTL | 偶數 | `true` | 封面(Pn) + 奇數剩餘 → P1 獨立封底 |
+| RTL | 奇數 | `false` | 全部配對，末尾落單 → P1 獨立 |
+
+#### 相關檔案
+
+- `app.js` — `buildBook()` 中的 `useShowCover` 計算
+
+---
+
 ### 2026-02-23: CDN 路徑錯誤
 
 #### 問題

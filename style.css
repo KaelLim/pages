@@ -51,7 +51,13 @@ body {
   position: fixed;
   pointer-events: none;
   z-index: 10;
-  background: repeating-linear-gradient(0deg, #f5f2eb 0px, #e8e5de 0.5px, #f5f2eb 1px);
+  background: repeating-linear-gradient(
+    90deg,
+    #e8e3d8 0px,
+    #e8e3d8 1.5px,
+    #9a9488 1.5px,
+    #9a9488 2px
+  );
 }
 
 .book-edge-left {
