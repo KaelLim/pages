@@ -124,7 +124,7 @@ async function init() {
         size: 'stretch',
         maxWidth: fitW,
         maxHeight: fitH,
-        flippingTime: 700,
+        flippingTime: 450,
         maxShadowOpacity: 0.3,
         showCover: true,
         mobileScrollSupport: false,
@@ -134,7 +134,15 @@ async function init() {
       pageFlip.loadFromHTML(bookEl.querySelectorAll('.page'));
       pageFlip.on('flip', () => {
         updatePageInfo();
-        updatePageEdges();
+      });
+      // Update edges to target position as soon as flip starts
+      pageFlip.on('flipping', (e) => {
+        updatePageEdges(e.data);
+      });
+      pageFlip.on('changeState', (e) => {
+        if (e.data === 'read') {
+          updatePageEdges();
+        }
       });
 
       // Wait one frame for StPageFlip to finish layout
@@ -149,12 +157,12 @@ async function init() {
     edgeRight.className = 'book-edge book-edge-right';
     document.body.appendChild(edgeRight);
 
-    function updatePageEdges() {
+    function updatePageEdges(overrideIdx) {
       const block = document.querySelector('.stf__block');
       if (!block || !pageFlip) return;
 
       const rect = block.getBoundingClientRect();
-      const idx = pageFlip.getCurrentPageIndex();
+      const idx = overrideIdx !== undefined ? overrideIdx : pageFlip.getCurrentPageIndex();
       const total = currentPageMap.length;
       const maxEdge = Math.min(Math.ceil(numPages / 5), 14);
 
