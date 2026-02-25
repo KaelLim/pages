@@ -94,6 +94,32 @@ window.addEventListener('resize', () => {
 document.getElementById('btn-prev').addEventListener('click', () => pageFlip.flipPrev());
 document.getElementById('btn-next').addEventListener('click', () => pageFlip.flipNext());
 
+// Font size scaling via CSS custom property
+let fontScale = 1.0;
+const FONT_STEP = 0.1;
+const FONT_MIN = 0.5;
+const FONT_MAX = 2.0;
+const fontInfoEl = document.getElementById('font-info');
+
+function applyFontScale() {
+  document.documentElement.style.setProperty('--font-scale', fontScale);
+  fontInfoEl.textContent = `${Math.round(fontScale * 100)}%`;
+}
+
+document.getElementById('btn-font-up').addEventListener('click', () => {
+  if (fontScale < FONT_MAX) {
+    fontScale = Math.min(FONT_MAX, +(fontScale + FONT_STEP).toFixed(1));
+    applyFontScale();
+  }
+});
+
+document.getElementById('btn-font-down').addEventListener('click', () => {
+  if (fontScale > FONT_MIN) {
+    fontScale = Math.max(FONT_MIN, +(fontScale - FONT_STEP).toFixed(1));
+    applyFontScale();
+  }
+});
+
 document.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowLeft') pageFlip.flipPrev();
   if (e.key === 'ArrowRight') pageFlip.flipNext();
