@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HTML Flipbook POC</title>
+  <link rel="stylesheet" href="html-book.css">
+</head>
+<body>
+  <div id="book-area">
+    <div id="book">
+      <!-- Page 1: Cover -->
+      <div class="page page-cover">
+        <div class="page-content">
+          <h1>HTML Flipbook</h1>
+          <p class="subtitle">A StPageFlip POC</p>
+        </div>
+      </div>
+
+      <!-- Page 2 -->
+      <div class="page">
+        <div class="page-content">
+          <h2>Chapter 1: Introduction</h2>
+          <img src="https://picsum.photos/seed/page2/600/300" alt="placeholder">
+          <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.</p>
+        </div>
+      </div>
+
+      <!-- Page 3 -->
+      <div class="page">
+        <div class="page-content">
+          <h2>Text & Images</h2>
+          <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident.</p>
+          <img src="https://picsum.photos/seed/page3/600/300" alt="placeholder">
+          <p>Sunt in culpa qui officia deserunt mollit anim id est laborum. Sed ut perspiciatis unde omnis iste natus error sit voluptatem.</p>
+        </div>
+      </div>
+
+      <!-- Page 4 -->
+      <div class="page">
+        <div class="page-content">
+          <h2>Chapter 2: Features</h2>
+          <ul>
+            <li>HTML content inside pages</li>
+            <li>Responsive font sizing with container queries</li>
+            <li>Images that scale with the page</li>
+            <li>Any CSS styling you want</li>
+            <li>Interactive elements possible</li>
+          </ul>
+          <p>Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.</p>
+        </div>
+      </div>
+
+      <!-- Page 5 -->
+      <div class="page">
+        <div class="page-content">
+          <h2>Full-Width Image</h2>
+          <img src="https://picsum.photos/seed/page5/600/400" alt="placeholder" class="img-full">
+          <p class="caption">A full-width image inside an HTML flipbook page.</p>
+        </div>
+      </div>
+
+      <!-- Page 6 -->
+      <div class="page">
+        <div class="page-content">
+          <h2>Chapter 3: Typography</h2>
+          <p>Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam.</p>
+          <blockquote>"The quick brown fox jumps over the lazy dog."</blockquote>
+          <p>Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur.</p>
+        </div>
+      </div>
+
+      <!-- Page 7 -->
+      <div class="page">
+        <div class="page-content">
+          <h2>Two Images</h2>
+          <div class="img-row">
+            <img src="https://picsum.photos/seed/page7a/280/200" alt="placeholder">
+            <img src="https://picsum.photos/seed/page7b/280/200" alt="placeholder">
+          </div>
+          <p>At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores.</p>
+        </div>
+      </div>
+
+      <!-- Page 8 -->
+      <div class="page">
+        <div class="page-content">
+          <h2>Chapter 4: Layout</h2>
+          <p>Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae non recusandae.</p>
+          <img src="https://picsum.photos/seed/page8/600/250" alt="placeholder">
+          <p>Itaque earum rerum hic tenetur a sapiente delectus, ut aut reiciendis voluptatibus maiores alias consequatur aut perferendis doloribus asperiores repellat.</p>
+        </div>
+      </div>
+
+      <!-- Page 9 -->
+      <div class="page">
+        <div class="page-content">
+          <h2>Data Table</h2>
+          <table>
+            <thead>
+              <tr><th>Feature</th><th>Image Mode</th><th>HTML Mode</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Content</td><td>Static</td><td>Dynamic</td></tr>
+              <tr><td>Interactivity</td><td>None</td><td>Full</td></tr>
+              <tr><td>RWD Text</td><td>No</td><td>Yes</td></tr>
+              <tr><td>Performance</td><td>Fast</td><td>Good</td></tr>
+            </tbody>
+          </table>
+          <p>Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus.</p>
+        </div>
+      </div>
+
+      <!-- Page 10 -->
+      <div class="page">
+        <div class="page-content">
+          <h2>Chapter 5: Responsive</h2>
+          <p>All text on these pages uses <strong>container query units</strong> (<code>cqi</code>), so fonts scale automatically when the book resizes.</p>
+          <img src="https://picsum.photos/seed/page10/600/300" alt="placeholder">
+          <p>Try resizing your browser window to see the text and images adapt to the new page dimensions.</p>
+        </div>
+      </div>
+
+      <!-- Page 11: Interactive Elements -->
+      <div class="page">
+        <div class="page-content">
+          <h2>Interactive Elements</h2>
+          <button class="demo-btn" onclick="this.textContent = 'Clicked! ✓'">Click Me</button>
+          <div class="form-group">
+            <label>Text Input</label>
+            <input type="text" placeholder="Type something here...">
+          </div>
+          <div class="form-group">
+            <label>Select</label>
+            <select>
+              <option>Option A</option>
+              <option>Option B</option>
+              <option>Option C</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label class="checkbox-label"><input type="checkbox"> Checkbox 1</label>
+            <label class="checkbox-label"><input type="checkbox" checked> Checkbox 2</label>
+          </div>
+          <div class="form-row">
+            <label class="radio-label"><input type="radio" name="demo" checked> Radio A</label>
+            <label class="radio-label"><input type="radio" name="demo"> Radio B</label>
+          </div>
+          <input type="range" class="demo-range" min="0" max="100" value="50">
+          <textarea placeholder="Textarea — type here..."></textarea>
+        </div>
+      </div>
+
+      <!-- Page 12: Back Cover -->
+      <div class="page page-cover page-back">
+        <div class="page-content">
+          <h1>The End</h1>
+          <p class="subtitle">HTML Flipbook POC</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toolbar">
+    <button id="btn-prev" title="Previous">&#9664;</button>
+    <span id="page-info">1 / 12</span>
+    <button id="btn-next" title="Next">&#9654;</button>
+  </div>
+
+  <script src="https://unpkg.com/page-flip@2.0.7/dist/js/page-flip.browser.js"></script>
+  <script src="html-book.js"></script>
+</body>
+</html>
