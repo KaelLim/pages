@@ -71,6 +71,8 @@ export abstract class UI {
      * Destructor. Remove all HTML elements and all event handlers
      */
     public destroy(): void {
+        window.removeEventListener('resize', this.onResize);
+
         if (this.app.getSettings().useMouseEvents) this.removeHandlers();
 
         this.distElement.remove();
