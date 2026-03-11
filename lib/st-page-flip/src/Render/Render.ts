@@ -307,17 +307,21 @@ export abstract class Render {
     }
 
     /**
-     * Get parent block offset width
+     * Get parent block content width (excluding padding)
      */
     public getBlockWidth(): number {
-        return this.app.getUI().getDistElement().offsetWidth;
+        const el = this.app.getUI().getDistElement();
+        const style = getComputedStyle(el);
+        return el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
     }
 
     /**
-     * Get parent block offset height
+     * Get parent block content height (excluding padding)
      */
     public getBlockHeight(): number {
-        return this.app.getUI().getDistElement().offsetHeight;
+        const el = this.app.getUI().getDistElement();
+        const style = getComputedStyle(el);
+        return el.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
     }
 
     /**
