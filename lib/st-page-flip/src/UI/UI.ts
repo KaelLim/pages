@@ -153,6 +153,13 @@ export abstract class UI {
         window.addEventListener('touchend', this.onTouchEnd);
     }
 
+    public setUseMouseEvents(enabled: boolean): void {
+        this.removeHandlers();
+        if (enabled) {
+            this.setHandlers();
+        }
+    }
+
     /**
      * Convert global coordinates to relative book coordinates
      *

@@ -337,6 +337,15 @@ export class PageFlip extends EventObject {
     }
 
     /**
+     * Toggle mouse/touch event handling at runtime
+     */
+    public setMouseEvents(enabled: boolean): void {
+        if (this.setting.useMouseEvents === enabled) return;
+        this.updateSetting('useMouseEvents', enabled);
+        this.ui.setUseMouseEvents(enabled);
+    }
+
+    /**
      * Get UI object
      *
      * @returns {UI}
