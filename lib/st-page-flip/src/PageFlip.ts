@@ -35,6 +35,9 @@ export class PageFlip extends EventObject {
 
     private ui: UI;
 
+    /** Track which pages have already been requested for rendering */
+    private requestedPages: Set<number> = new Set();
+
     /**
      * Create a new PageFlip instance
      *
@@ -122,6 +125,7 @@ export class PageFlip extends EventObject {
                 page: this.setting.startPage,
                 mode: this.render.getOrientation(),
             });
+            this.emitRenderPages();
         }, 1);
     }
 
@@ -240,6 +244,34 @@ export class PageFlip extends EventObject {
      */
     public updatePageIndex(newPage: number): void {
         this.trigger('flip', this, newPage);
+        this.emitRenderPages();
+    }
+
+    /**
+     * Emit renderPages event with page indices that need to be rendered.
+     * Only emits indices that haven't been requested before.
+     */
+    private emitRenderPages(): void {
+        if (!this.pages || this.setting.preloadRange <= 0) return;
+
+        const current = this.pages.getCurrentPageIndex();
+        const total = this.pages.getPageCount();
+        const range = this.setting.preloadRange;
+
+        const start = Math.max(0, current - range);
+        const end = Math.min(total - 1, current + range + 1);
+
+        const needed: number[] = [];
+        for (let i = start; i <= end; i++) {
+            if (!this.requestedPages.has(i)) {
+                needed.push(i);
+                this.requestedPages.add(i);
+            }
+        }
+
+        if (needed.length > 0) {
+            this.trigger('renderPages', this, needed);
+        }
     }
 
     /**

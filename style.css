@@ -7,7 +7,7 @@
 body {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100dvh;
   background: #1a1a2e;
   overflow: hidden;
 }
@@ -170,13 +170,13 @@ body {
 /* ── Toolbar ── */
 
 #toolbar {
-  flex: 1;
+  flex: 0 0 auto;
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   align-items: center;
-  gap: 10px;
-  min-height: 0;
-  padding: 0 20px;
+  gap: 6px 10px;
+  padding: 6px 12px;
   opacity: 0;
   transition: opacity 0.3s;
 }
@@ -349,4 +349,38 @@ body {
   font-size: 0.75rem;
   padding: 4px 0;
   background: rgba(0, 0, 0, 0.3);
+}
+
+/* ── Mobile RWD ── */
+
+@media (max-width: 600px) {
+  #toolbar {
+    gap: 2px 6px;
+    padding: 4px 8px;
+  }
+
+  #page-slider {
+    flex-basis: 100%;
+    max-width: none;
+    order: -1;
+  }
+
+  #toolbar button {
+    padding: 4px 6px;
+    font-size: 0.9rem;
+  }
+
+  #toolbar-divider {
+    display: none;
+  }
+
+  #zoom-info {
+    display: none;
+  }
+
+  #thumbnail-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px;
+    padding: 0 12px 12px;
+  }
 }

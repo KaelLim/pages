@@ -65,6 +65,9 @@ export interface FlipSetting {
     showEdge: boolean;
     /** Maximum width of the edge in pixels */
     edgeWidth: number;
+
+    /** Number of pages to preload ahead/behind the current view. 0 = preload all at once */
+    preloadRange: number;
 }
 
 export class Settings {
@@ -93,6 +96,7 @@ export class Settings {
         rtl: false,
         showEdge: false,
         edgeWidth: 10,
+        preloadRange: 3,
     };
 
     /**

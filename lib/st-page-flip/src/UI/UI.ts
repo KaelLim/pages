@@ -81,9 +81,11 @@ export abstract class UI {
         if (setting.autoSize) {
             this.parentElement.style.width = '100%';
             this.parentElement.style.maxWidth = setting.maxWidth * 2 + 'px';
+            this.parentElement.style.maxHeight = '100%';
         } else {
             this.parentElement.style.width = '';
             this.parentElement.style.maxWidth = '';
+            this.parentElement.style.maxHeight = '';
         }
 
         this.parentElement.style.display = 'block';
@@ -121,16 +123,20 @@ export abstract class UI {
         this.wrapper.classList.remove('--portrait', '--landscape');
 
         if (orientation === Orientation.PORTRAIT) {
-            if (this.app.getSettings().autoSize)
+            if (this.app.getSettings().autoSize) {
                 this.wrapper.style.paddingBottom =
                     (this.app.getSettings().height / this.app.getSettings().width) * 100 + '%';
+                this.wrapper.style.maxHeight = '100%';
+            }
 
             this.wrapper.classList.add('--portrait');
         } else {
-            if (this.app.getSettings().autoSize)
+            if (this.app.getSettings().autoSize) {
                 this.wrapper.style.paddingBottom =
                     (this.app.getSettings().height / (this.app.getSettings().width * 2)) * 100 +
                     '%';
+                this.wrapper.style.maxHeight = '100%';
+            }
 
             this.wrapper.classList.add('--landscape');
         }

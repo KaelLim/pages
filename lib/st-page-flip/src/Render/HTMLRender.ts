@@ -81,39 +81,80 @@ export class HTMLRender extends Render {
         const pageCount = this.app.getPageCount();
         const currentPage = this.app.getCurrentPageIndex();
         const maxWidth = this.getSettings().edgeWidth;
+        const rtl = this.getSettings().rtl;
 
-        const leftRatio = currentPage / Math.max(pageCount - 1, 1);
-        const rightRatio = 1 - leftRatio;
+        let readProgress = currentPage / Math.max(pageCount - 1, 1);
+        if (rtl) readProgress = 1 - readProgress;
 
-        const leftWidth = Math.max(1, Math.round(maxWidth * leftRatio));
-        const rightWidth = Math.max(1, Math.round(maxWidth * rightRatio));
+        const readW = Math.round(readProgress * maxWidth);
+        const unreadW = Math.round((1 - readProgress) * maxWidth);
 
-        const centerX = rect.left + rect.width / 2;
+        const leftWidth = rtl ? unreadW : readW;
+        const rightWidth = rtl ? readW : unreadW;
+
         const zIndex = this.getSettings().startZIndex + 2;
+        const bgLayers = `
+            background:
+                linear-gradient(to bottom,
+                    rgba(0,0,0,0.3) 0%,
+                    rgba(0,0,0,0.06) 20%,
+                    rgba(255,255,255,0.1) 50%,
+                    rgba(0,0,0,0.06) 80%,
+                    rgba(0,0,0,0.3) 100%
+                ),
+                repeating-linear-gradient(
+                    90deg,
+                    #e8e3d8 0px,
+                    #e8e3d8 1.5px,
+                    #9a9488 1.5px,
+                    #9a9488 2px
+                );`;
 
-        this.leftEdge.style.cssText = `
-            display: block;
-            position: absolute;
-            z-index: ${zIndex};
-            left: ${centerX - leftWidth}px;
-            top: ${rect.top}px;
-            width: ${leftWidth}px;
-            height: ${rect.height}px;
-            background: linear-gradient(to left, #b8b5ae, #d4d0c8 40%, #b8b5ae);
-            border-right: 1px solid rgba(0,0,0,0.15);
-        `;
+        // Position at outer edges of the book (fore-edges)
+        // Hide edge when no pages on that side
+        if (leftWidth <= 0) {
+            this.leftEdge.style.cssText = 'display: none';
+        } else {
+            this.leftEdge.style.cssText = `
+                display: block;
+                position: absolute;
+                z-index: ${zIndex};
+                left: ${rect.left - leftWidth}px;
+                top: ${rect.top}px;
+                width: ${leftWidth}px;
+                height: ${rect.height}px;
+                pointer-events: none;
+                ${bgLayers}
+                clip-path: polygon(
+                    100% 0%, 90% 0%, 60% 1%, 30% 2.5%,
+                    10% 4%, 0% 6%, 0% 94%, 10% 96%,
+                    30% 97.5%, 60% 99%, 90% 100%, 100% 100%
+                );
+                filter: drop-shadow(-1px 0 1px rgba(0,0,0,0.2));
+            `;
+        }
 
-        this.rightEdge.style.cssText = `
-            display: block;
-            position: absolute;
-            z-index: ${zIndex};
-            left: ${centerX}px;
-            top: ${rect.top}px;
-            width: ${rightWidth}px;
-            height: ${rect.height}px;
-            background: linear-gradient(to right, #b8b5ae, #d4d0c8 40%, #b8b5ae);
-            border-left: 1px solid rgba(0,0,0,0.15);
-        `;
+        if (rightWidth <= 0) {
+            this.rightEdge.style.cssText = 'display: none';
+        } else {
+            this.rightEdge.style.cssText = `
+                display: block;
+                position: absolute;
+                z-index: ${zIndex};
+                left: ${rect.left + rect.width}px;
+                top: ${rect.top}px;
+                width: ${rightWidth}px;
+                height: ${rect.height}px;
+                pointer-events: none;
+                ${bgLayers}
+                clip-path: polygon(
+                    0% 0%, 10% 0%, 40% 1%, 70% 2.5%,
+                    90% 4%, 100% 6%, 100% 94%, 90% 96%,
+                    70% 97.5%, 40% 99%, 10% 100%, 0% 100%
+                );
+                filter: drop-shadow(1px 0 1px rgba(0,0,0,0.2));
+            `;
+        }
     }
 
     public clearShadow(): void {

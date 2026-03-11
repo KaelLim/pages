@@ -42,12 +42,12 @@ async function init() {
   let bookEl = document.getElementById('book');
 
   try {
-    // 1. Load PDF (with CORS proxy fallback for external URLs)
+    // 1. Load PDF document (streaming — only downloads metadata + needed pages)
+    loadingEl.textContent = 'Loading PDF...';
     let pdfSource = PDF_URL;
     const isExternal = PDF_URL.startsWith('http');
     if (isExternal) {
       try {
-        loadingEl.textContent = 'Loading PDF...';
         const res = await fetch(PDF_URL);
         pdfSource = { data: await res.arrayBuffer() };
       } catch {
@@ -61,24 +61,32 @@ async function init() {
     const pdf = await pdfjsLib.getDocument(pdfSource).promise;
     const numPages = pdf.numPages;
 
-    // 2. Render all pages to images
-    const pageImages = [];
-    for (let i = 1; i <= numPages; i++) {
-      loadingEl.textContent = `Rendering page ${i} of ${numPages}...`;
-      const pageData = await renderPageToImage(pdf, i);
-      pageImages.push(pageData);
-    }
+    // 2. Render only the first page to get dimensions
+    loadingEl.textContent = 'Rendering...';
+    const firstPage = await renderPageToImage(pdf, 1);
+    const pageWidth = Math.round(firstPage.width);
+    const pageHeight = Math.round(firstPage.height);
 
-    // 3. Get page dimensions from first page
-    const pageWidth = Math.round(pageImages[0].width);
-    const pageHeight = Math.round(pageImages[0].height);
+    // Page render cache: index → dataUrl (1-based)
+    const renderedPages = new Map();
+    renderedPages.set(1, firstPage.dataUrl);
 
     let isRtl = false;
     let pageFlip = null;
     let currentPageMap = []; // maps flip index → original page number (0 = blank)
     let currentShowCover = true;
     let lastSoundTime = 0;
-    let isSinglePage = false;
+
+    // Render a PDF page and fill it into the corresponding DOM element
+    async function renderPageInto(originalPageNum, imgEl) {
+      if (renderedPages.has(originalPageNum)) {
+        imgEl.src = renderedPages.get(originalPageNum);
+        return;
+      }
+      const pageData = await renderPageToImage(pdf, originalPageNum);
+      renderedPages.set(originalPageNum, pageData.dataUrl);
+      imgEl.src = pageData.dataUrl;
+    }
 
     // Build page DOM elements and init StPageFlip
     function buildBook(rtl, targetOriginalPage, mouseEvents = true) {
@@ -98,98 +106,72 @@ async function init() {
       }
       bookEl = newBookEl;
 
-      // Build page list: [P1, P2, ..., Pn]
-      const entries = [];
-      for (let i = 0; i < pageImages.length; i++) {
-        entries.push({ img: pageImages[i], num: i + 1 });
-      }
+      // Build page order (RTL = reversed)
+      const pageNums = [];
+      for (let i = 1; i <= numPages; i++) pageNums.push(i);
+      if (rtl) pageNums.reverse();
 
-      // For RTL: reverse entire page order
-      if (rtl) {
-        entries.reverse();
-      }
-
-      // Build DOM and page map
+      // Build DOM with placeholder divs (only fill cached pages immediately)
       currentPageMap = [];
-      for (const entry of entries) {
+      const pageDivs = [];
+      for (const num of pageNums) {
         const div = document.createElement('div');
         div.dataset.density = 'soft';
         div.className = 'page';
         const img = document.createElement('img');
-        img.src = entry.img.dataUrl;
+        if (renderedPages.has(num)) {
+          img.src = renderedPages.get(num);
+        }
         div.appendChild(img);
         bookEl.appendChild(div);
-        currentPageMap.push(entry.num);
+        currentPageMap.push(num);
+        pageDivs.push(div);
       }
 
-      const totalBookPages = entries.length;
-
-      // Calculate page dimensions that fit the book area
-      // (prevents StPageFlip container vs page size mismatch)
-      const bookArea = document.getElementById('book-area');
-      const aspectRatio = pageWidth / pageHeight;
-      const areaStyle = getComputedStyle(bookArea);
-      const viewW = bookArea.clientWidth - parseFloat(areaStyle.paddingLeft) - parseFloat(areaStyle.paddingRight);
-      const viewH = bookArea.clientHeight - parseFloat(areaStyle.paddingTop) - parseFloat(areaStyle.paddingBottom);
-
-      let fitW = Math.round(viewH * aspectRatio);
-      let fitH = viewH;
-
-      if (isSinglePage) {
-        // Single page: fit one page to viewport
-        if (fitW > viewW) {
-          fitW = viewW;
-          fitH = Math.round(fitW / aspectRatio);
-        }
-      } else {
-        // Double page: fit two pages to viewport
-        if (fitW * 2 > viewW) {
-          fitW = Math.floor(viewW / 2);
-          fitH = Math.round(fitW / aspectRatio);
-        }
-      }
-
-      // Never exceed original canvas resolution (no upscaling)
-      fitW = Math.min(fitW, pageWidth);
-      fitH = Math.min(fitH, pageHeight);
+      const totalBookPages = pageNums.length;
 
       // RTL: P1 is at the end of reversed entries and must display alone.
-      // showCover always treats index 0 as cover. For RTL, P1 is alone when:
-      //   even total → showCover: true  → cover(Pn) + odd remaining → P1 = back cover
-      //   odd total  → showCover: false → all paired, last odd page alone = P1
       const useShowCover = rtl ? (totalBookPages % 2 === 0) : true;
       currentShowCover = useShowCover;
 
-      // Single page: use fixed size and constrain container to one page width
-      // so StPageFlip auto-switches to portrait mode
-      if (isSinglePage) {
-        bookEl.style.width = fitW + 'px';
-        bookEl.style.maxWidth = fitW + 'px';
-        bookEl.style.height = fitH + 'px';
-      }
-
       pageFlip = new St.PageFlip(bookEl, {
-        width: fitW,
-        height: fitH,
-        size: isSinglePage ? 'fixed' : 'stretch',
-        maxWidth: fitW,
-        maxHeight: fitH,
+        width: pageWidth,
+        height: pageHeight,
+        size: 'stretch',
+        minWidth: 250,
+        maxWidth: pageWidth,
+        minHeight: Math.round(250 * (pageHeight / pageWidth)),
+        maxHeight: pageHeight,
         flippingTime: 450,
         maxShadowOpacity: 0.3,
         showCover: useShowCover,
         mobileScrollSupport: false,
-        autoSize: !isSinglePage,
+        autoSize: true,
         usePortrait: true,
         useMouseEvents: mouseEvents,
         showEdge: true,
         edgeWidth: Math.min(Math.ceil(numPages / 4), 20),
+        preloadRange: 3,
         startPage: targetOriginalPage !== undefined
           ? currentPageMap.indexOf(targetOriginalPage)
           : (rtl ? totalBookPages - 1 : 0),
       });
+      // Lazy render: register BEFORE loadFromHTML so the synchronous
+      // emitRenderPages() during init is caught
+      pageFlip.on('renderPages', (e) => {
+        const indices = e.data;
+        for (const idx of indices) {
+          const originalPage = currentPageMap[idx];
+          const img = pageDivs[idx]?.querySelector('img');
+          if (originalPage && img && !img.getAttribute('src')) {
+            renderPageInto(originalPage, img);
+          }
+        }
+      });
+
       pageFlip.loadFromHTML(bookEl.querySelectorAll('.page'));
+
       pageFlip.on('flip', () => {
-        // Play sound for drag flips (debounced to avoid double with button flips)
         const now = Date.now();
         if (now - lastSoundTime > 500) {
           flipSound();
@@ -229,7 +211,7 @@ async function init() {
     const btnFirst = document.getElementById('btn-first');
     const btnLast = document.getElementById('btn-last');
     const btnThumbnail = document.getElementById('btn-thumbnail');
-    const btnPageMode = document.getElementById('btn-page-mode');
+
     const btnFullscreen = document.getElementById('btn-fullscreen');
     const btnShare = document.getElementById('btn-share');
     const btnSound = document.getElementById('btn-sound');
@@ -341,10 +323,13 @@ async function init() {
       const total = currentPageMap.length;
       const page1 = currentPageMap[idx] || 1;
 
-      // Check if current view is a spread (two pages visible)
-      const isSpreadStart = currentShowCover
+      // Portrait mode = single page, never show spread
+      const isPortrait = pageFlip.getOrientation() === 'portrait';
+
+      // Check if current view is a spread (two pages visible, landscape only)
+      const isSpreadStart = !isPortrait && (currentShowCover
         ? (idx > 0 && idx % 2 === 1)
-        : (idx % 2 === 0);
+        : (idx % 2 === 0));
 
       if (isSpreadStart && idx + 1 < total) {
         const page2 = currentPageMap[idx + 1];
@@ -408,6 +393,7 @@ async function init() {
     });
     pageSlider.addEventListener('change', () => {
       flipSound();
+      pageSlider.blur();
     });
 
     btnSound.addEventListener('click', () => {
@@ -429,16 +415,6 @@ async function init() {
       updatePageInfo();
     });
 
-    btnPageMode.addEventListener('click', () => {
-      const currentOriginalPage = getOriginalPage();
-      isSinglePage = !isSinglePage;
-      btnPageMode.innerHTML = `<span class="material-symbols-rounded">${isSinglePage ? 'menu_book' : 'article'}</span>`;
-      btnPageMode.style.background = isSinglePage ? 'rgba(255,255,255,0.25)' : '';
-      zoomLevel = 1; panX = 0; panY = 0;
-      buildBook(isRtl, currentOriginalPage);
-      applyZoom();
-      updatePageInfo();
-    });
 
     btnFullscreen.addEventListener('click', () => {
       if (!document.fullscreenElement) {
@@ -485,7 +461,11 @@ async function init() {
       imgWrap.className = pages.length === 1 ? 'thumb-single' : 'thumb-spread';
       for (const pageNum of pages) {
         const img = document.createElement('img');
-        img.src = pageImages[pageNum - 1].dataUrl;
+        if (renderedPages.has(pageNum)) {
+          img.src = renderedPages.get(pageNum);
+        } else {
+          renderPageInto(pageNum, img);
+        }
         imgWrap.appendChild(img);
       }
       item.appendChild(imgWrap);
