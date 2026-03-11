@@ -357,6 +357,16 @@ export class PageFlip extends EventObject {
     }
 
     /**
+     * Toggle size mode at runtime
+     */
+    public setSizeMode(size: string, autoSize: boolean): void {
+        this.updateSetting('size', size as any);
+        this.updateSetting('autoSize', autoSize);
+        this.ui.applySizing();
+        this.update();
+    }
+
+    /**
      * Get UI object
      *
      * @returns {UI}

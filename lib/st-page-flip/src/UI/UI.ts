@@ -45,23 +45,7 @@ export abstract class UI {
 
         this.app = app;
 
-        const k = this.app.getSettings().usePortrait ? 1 : 2;
-
-        // Setting block sizes based on configuration
-        inBlock.style.minWidth = setting.minWidth * k + 'px';
-        inBlock.style.minHeight = setting.minHeight + 'px';
-
-        if (setting.size === SizeType.FIXED) {
-            inBlock.style.minWidth = setting.width * k + 'px';
-            inBlock.style.minHeight = setting.height + 'px';
-        }
-
-        if (setting.autoSize) {
-            inBlock.style.width = '100%';
-            inBlock.style.maxWidth = setting.maxWidth * 2 + 'px';
-        }
-
-        inBlock.style.display = 'block';
+        this.applySizing();
 
         window.addEventListener('resize', this.onResize, false);
         this.swipeDistance = setting.swipeDistance;
@@ -77,6 +61,32 @@ export abstract class UI {
 
         this.distElement.remove();
         this.wrapper.remove();
+    }
+
+    /**
+     * Apply sizing styles to parent element based on current settings
+     */
+    public applySizing(): void {
+        const setting = this.app.getSettings();
+        const k = setting.usePortrait ? 1 : 2;
+
+        this.parentElement.style.minWidth = setting.minWidth * k + 'px';
+        this.parentElement.style.minHeight = setting.minHeight + 'px';
+
+        if (setting.size === SizeType.FIXED) {
+            this.parentElement.style.minWidth = setting.width * k + 'px';
+            this.parentElement.style.minHeight = setting.height + 'px';
+        }
+
+        if (setting.autoSize) {
+            this.parentElement.style.width = '100%';
+            this.parentElement.style.maxWidth = setting.maxWidth * 2 + 'px';
+        } else {
+            this.parentElement.style.width = '';
+            this.parentElement.style.maxWidth = '';
+        }
+
+        this.parentElement.style.display = 'block';
     }
 
     /**
