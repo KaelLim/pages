@@ -78,7 +78,6 @@ async function init() {
     let currentPageMap = []; // maps flip index → original page number (0 = blank)
     let currentShowCover = true;
     let lastSoundTime = 0;
-    let edgesFrozen = false;
     let isSinglePage = false;
 
     // Build page DOM elements and init StPageFlip
@@ -182,6 +181,8 @@ async function init() {
         autoSize: !isSinglePage,
         usePortrait: true,
         useMouseEvents: mouseEvents,
+        showEdge: true,
+        edgeWidth: Math.min(Math.ceil(numPages / 4), 20),
         startPage: targetOriginalPage !== undefined
           ? currentPageMap.indexOf(targetOriginalPage)
           : (rtl ? totalBookPages - 1 : 0),
@@ -196,57 +197,6 @@ async function init() {
         }
         updatePageInfo();
       });
-      pageFlip.on('flipping', (e) => {
-        updatePageEdges(e.data);
-      });
-      pageFlip.on('changeState', (e) => {
-        if (e.data === 'read') {
-          edgesFrozen = false;
-          updatePageEdges();
-        }
-      });
-
-      // Wait one frame for StPageFlip to finish layout
-      requestAnimationFrame(() => updatePageEdges());
-    }
-
-    // Page-edge elements (position: fixed, won't affect #book layout)
-    const edgeLeft = document.createElement('div');
-    edgeLeft.className = 'book-edge book-edge-left';
-    document.body.appendChild(edgeLeft);
-    const edgeRight = document.createElement('div');
-    edgeRight.className = 'book-edge book-edge-right';
-    document.body.appendChild(edgeRight);
-
-    function updatePageEdges(overrideIdx) {
-      if (zoomLevel > 1 || edgesFrozen) {
-        edgeLeft.style.display = 'none';
-        edgeRight.style.display = 'none';
-        return;
-      }
-      edgeLeft.style.display = '';
-      edgeRight.style.display = '';
-      const block = document.querySelector('.stf__block');
-      if (!block || !pageFlip) return;
-
-      const rect = block.getBoundingClientRect();
-      const idx = overrideIdx !== undefined ? overrideIdx : pageFlip.getCurrentPageIndex();
-      const total = currentPageMap.length;
-      const maxEdge = Math.min(Math.ceil(numPages / 4), 20);
-
-      let readProgress = idx / Math.max(total - 1, 1);
-      if (isRtl) readProgress = 1 - readProgress;
-
-      const readW = Math.round(readProgress * maxEdge);
-      const unreadW = maxEdge - readW;
-      const lw = isRtl ? unreadW : readW;
-      const rw = isRtl ? readW : unreadW;
-
-      const h = rect.height;
-      const top = rect.top;
-
-      edgeLeft.style.cssText = `position:fixed;top:${top}px;height:${h}px;left:${rect.left - lw}px;width:${lw}px`;
-      edgeRight.style.cssText = `position:fixed;top:${top}px;height:${h}px;left:${rect.right}px;width:${rw}px`;
     }
 
     let resizeTimer;
@@ -303,11 +253,9 @@ async function init() {
       const isZoomed = zoomLevel > 1;
       const wasZoomed = bookArea.classList.contains('zoom-mode');
 
-      // Rebuild PageFlip only when crossing the 100% threshold
-      if (isZoomed !== wasZoomed) {
-        const currentOriginalPage = getOriginalPage();
-        buildBook(isRtl, currentOriginalPage, !isZoomed);
-        updatePageInfo();
+      // Toggle mouse events when crossing the 100% threshold (no rebuild needed)
+      if (isZoomed !== wasZoomed && pageFlip) {
+        pageFlip.setMouseEvents(!isZoomed);
       }
 
       // Reset pan when not zoomed in
@@ -327,18 +275,12 @@ async function init() {
       bookArea.classList.toggle('zoom-mode', isZoomed);
       btnZoomClose.classList.toggle('hidden', !isZoomed);
 
-      // Hide nav & edges when zoomed in
+      // Hide nav when zoomed in
       const navDisplay = isZoomed ? 'none' : '';
       btnPrev.style.display = navDisplay;
       btnNext.style.display = navDisplay;
       btnFirst.style.display = navDisplay;
       btnLast.style.display = navDisplay;
-      edgeLeft.style.display = navDisplay;
-      edgeRight.style.display = navDisplay;
-
-      if (!isZoomed) {
-        requestAnimationFrame(() => updatePageEdges());
-      }
     }
 
     function resetZoom() {
@@ -431,7 +373,7 @@ async function init() {
     function goFirst() {
       const targetIdx = isRtl ? currentPageMap.length - 1 : 0;
       if (pageFlip.getCurrentPageIndex() === targetIdx) return;
-      edgesFrozen = true;
+
       flipSound();
       lastSoundTime = Date.now();
       pageFlip.flip(targetIdx);
@@ -440,7 +382,7 @@ async function init() {
     function goLast() {
       const targetIdx = isRtl ? 0 : currentPageMap.length - 1;
       if (pageFlip.getCurrentPageIndex() === targetIdx) return;
-      edgesFrozen = true;
+
       flipSound();
       lastSoundTime = Date.now();
       pageFlip.flip(targetIdx);
@@ -460,7 +402,7 @@ async function init() {
       const targetIdx = currentPageMap.indexOf(targetPage);
       if (targetIdx >= 0) {
         pageFlip.turnToPage(targetIdx);
-        updatePageEdges(targetIdx);
+
         updatePageInfo();
       }
     });
@@ -556,7 +498,7 @@ async function init() {
 
       item.addEventListener('click', () => {
         pageFlip.turnToPage(flipIdx);
-        updatePageEdges(flipIdx);
+
         updatePageInfo();
         thumbOverlay.classList.add('hidden');
       });
