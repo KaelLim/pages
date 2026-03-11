@@ -21,6 +21,9 @@ export class HTMLRender extends Render {
     private hardShadow: HTMLElement = null;
     private hardInnerShadow: HTMLElement = null;
 
+    private leftEdge: HTMLElement = null;
+    private rightEdge: HTMLElement = null;
+
     /**
      * @constructor
      *
@@ -34,6 +37,7 @@ export class HTMLRender extends Render {
         this.element = element;
 
         this.createShadows();
+        this.createEdges();
     }
 
     private createShadows(): void {
@@ -49,6 +53,67 @@ export class HTMLRender extends Render {
         this.innerShadow = this.element.querySelector('.stf__innerShadow');
         this.hardShadow = this.element.querySelector('.stf__hardShadow');
         this.hardInnerShadow = this.element.querySelector('.stf__hardInnerShadow');
+    }
+
+    private createEdges(): void {
+        if (!this.getSettings().showEdge) return;
+
+        this.element.insertAdjacentHTML(
+            'beforeend',
+            `<div class="stf__edge stf__edgeLeft"></div>
+             <div class="stf__edge stf__edgeRight"></div>`
+        );
+
+        this.leftEdge = this.element.querySelector('.stf__edgeLeft');
+        this.rightEdge = this.element.querySelector('.stf__edgeRight');
+    }
+
+    private drawEdges(): void {
+        if (!this.getSettings().showEdge || !this.leftEdge || !this.rightEdge) return;
+
+        if (this.orientation === Orientation.PORTRAIT) {
+            this.leftEdge.style.display = 'none';
+            this.rightEdge.style.display = 'none';
+            return;
+        }
+
+        const rect = this.getRect();
+        const pageCount = this.app.getPageCount();
+        const currentPage = this.app.getCurrentPageIndex();
+        const maxWidth = this.getSettings().edgeWidth;
+
+        const leftRatio = currentPage / Math.max(pageCount - 1, 1);
+        const rightRatio = 1 - leftRatio;
+
+        const leftWidth = Math.max(1, Math.round(maxWidth * leftRatio));
+        const rightWidth = Math.max(1, Math.round(maxWidth * rightRatio));
+
+        const centerX = rect.left + rect.width / 2;
+        const zIndex = this.getSettings().startZIndex + 2;
+
+        this.leftEdge.style.cssText = `
+            display: block;
+            position: absolute;
+            z-index: ${zIndex};
+            left: ${centerX - leftWidth}px;
+            top: ${rect.top}px;
+            width: ${leftWidth}px;
+            height: ${rect.height}px;
+            background: linear-gradient(to left, #b8b5ae, #d4d0c8 40%, #b8b5ae);
+            border-right: 1px solid rgba(0,0,0,0.15);
+        `;
+
+        this.rightEdge.style.cssText = `
+            display: block;
+            position: absolute;
+            z-index: ${zIndex};
+            left: ${centerX}px;
+            top: ${rect.top}px;
+            width: ${rightWidth}px;
+            height: ${rect.height}px;
+            background: linear-gradient(to right, #b8b5ae, #d4d0c8 40%, #b8b5ae);
+            border-left: 1px solid rgba(0,0,0,0.15);
+        `;
     }
 
     public clearShadow(): void {
@@ -349,6 +414,8 @@ export class HTMLRender extends Render {
                 this.drawHardInnerShadow();
             }
         }
+
+        this.drawEdges();
     }
 
     private clear(): void {

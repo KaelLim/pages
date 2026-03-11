@@ -60,6 +60,11 @@ export interface FlipSetting {
 
     /** Right-to-left page order */
     rtl: boolean;
+
+    /** Show 3D edge effect on the book spine */
+    showEdge: boolean;
+    /** Maximum width of the edge in pixels */
+    edgeWidth: number;
 }
 
 export class Settings {
@@ -86,6 +91,8 @@ export class Settings {
         showPageCorners: true,
         disableFlipByClick: false,
         rtl: false,
+        showEdge: false,
+        edgeWidth: 10,
     };
 
     /**
