@@ -26,7 +26,7 @@ export class PageFlip extends EventObject {
     private isUserTouch = false;
     private isUserMove = false;
 
-    private readonly setting: FlipSetting = null;
+    private setting: FlipSetting = null;
     private readonly block: HTMLElement; // Root HTML Element
 
     private pages: PageCollection = null;
@@ -324,6 +324,16 @@ export class PageFlip extends EventObject {
      */
     public getSettings(): FlipSetting {
         return this.setting;
+    }
+
+    /**
+     * Update a single setting at runtime
+     *
+     * @param {K} key - Setting key
+     * @param {FlipSetting[K]} value - New value
+     */
+    public updateSetting<K extends keyof FlipSetting>(key: K, value: FlipSetting[K]): void {
+        this.setting[key] = value;
     }
 
     /**
