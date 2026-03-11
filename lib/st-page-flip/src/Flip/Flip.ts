@@ -241,9 +241,13 @@ export class Flip {
      * @param {FlipCorner} corner - Active page corner when turning
      */
     public flipNext(corner: FlipCorner): void {
+        const rect = this.render.getRect();
+        const x = this.app.getSettings().rtl
+            ? rect.left + 10
+            : rect.left + rect.pageWidth * 2 - 10;
         this.flip({
-            x: this.render.getRect().left + this.render.getRect().pageWidth * 2 - 10,
-            y: corner === FlipCorner.TOP ? 1 : this.render.getRect().height - 2,
+            x,
+            y: corner === FlipCorner.TOP ? 1 : rect.height - 2,
         });
     }
 
@@ -253,9 +257,13 @@ export class Flip {
      * @param {FlipCorner} corner - Active page corner when turning
      */
     public flipPrev(corner: FlipCorner): void {
+        const rect = this.render.getRect();
+        const x = this.app.getSettings().rtl
+            ? rect.left + rect.pageWidth * 2 - 10
+            : 10;
         this.flip({
-            x: 10,
-            y: corner === FlipCorner.TOP ? 1 : this.render.getRect().height - 2,
+            x,
+            y: corner === FlipCorner.TOP ? 1 : rect.height - 2,
         });
     }
 
@@ -384,13 +392,28 @@ export class Flip {
 
     private getDirectionByPoint(touchPos: Point): FlipDirection {
         const rect = this.getBoundsRect();
+        const rtl = this.app.getSettings().rtl;
 
         if (this.render.getOrientation() === Orientation.PORTRAIT) {
-            if (touchPos.x - rect.pageWidth <= rect.width / 5) {
-                return FlipDirection.BACK;
+            if (rtl) {
+                if (touchPos.x - rect.pageWidth > rect.width / 5) {
+                    return FlipDirection.BACK;
+                }
+            } else {
+                if (touchPos.x - rect.pageWidth <= rect.width / 5) {
+                    return FlipDirection.BACK;
+                }
             }
-        } else if (touchPos.x < rect.width / 2) {
-            return FlipDirection.BACK;
+        } else {
+            if (rtl) {
+                if (touchPos.x >= rect.width / 2) {
+                    return FlipDirection.BACK;
+                }
+            } else {
+                if (touchPos.x < rect.width / 2) {
+                    return FlipDirection.BACK;
+                }
+            }
         }
 
         return FlipDirection.FORWARD;

@@ -280,18 +280,15 @@ export abstract class UI {
                     distY < this.swipeDistance * 2 &&
                     Date.now() - this.touchPoint.time < this.swipeTimeout
                 ) {
+                    const rtl = this.app.getSettings().rtl;
+                    const corner = this.touchPoint.point.y < this.app.getRender().getRect().height / 2
+                        ? FlipCorner.TOP
+                        : FlipCorner.BOTTOM;
+
                     if (dx > 0) {
-                        this.app.flipPrev(
-                            this.touchPoint.point.y < this.app.getRender().getRect().height / 2
-                                ? FlipCorner.TOP
-                                : FlipCorner.BOTTOM
-                        );
+                        rtl ? this.app.flipNext(corner) : this.app.flipPrev(corner);
                     } else {
-                        this.app.flipNext(
-                            this.touchPoint.point.y < this.app.getRender().getRect().height / 2
-                                ? FlipCorner.TOP
-                                : FlipCorner.BOTTOM
-                        );
+                        rtl ? this.app.flipPrev(corner) : this.app.flipNext(corner);
                     }
                     isSwipe = true;
                 }

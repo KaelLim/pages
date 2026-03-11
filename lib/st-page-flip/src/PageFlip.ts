@@ -367,6 +367,14 @@ export class PageFlip extends EventObject {
     }
 
     /**
+     * Toggle RTL mode at runtime
+     */
+    public setRtl(enabled: boolean): void {
+        if (this.setting.rtl === enabled) return;
+        this.updateSetting('rtl', enabled);
+    }
+
+    /**
      * Get UI object
      *
      * @returns {UI}

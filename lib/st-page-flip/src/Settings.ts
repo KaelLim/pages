@@ -57,6 +57,9 @@ export interface FlipSetting {
 
     /** if this value is true, flipping by clicking on the whole book will be locked. Only on corners */
     disableFlipByClick: boolean;
+
+    /** Right-to-left page order */
+    rtl: boolean;
 }
 
 export class Settings {
@@ -82,6 +85,7 @@ export class Settings {
         useMouseEvents: true,
         showPageCorners: true,
         disableFlipByClick: false,
+        rtl: false,
     };
 
     /**
