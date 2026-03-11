@@ -11,8 +11,6 @@ type NumberArray = number[];
 export abstract class PageCollection {
     protected readonly app: PageFlip;
     protected readonly render: Render;
-    protected readonly isShowCover: boolean;
-
     /** Pages List */
     protected pages: Page[] = [];
     /** Index of the current page in list */
@@ -30,7 +28,6 @@ export abstract class PageCollection {
         this.app = app;
 
         this.currentPageIndex = 0;
-        this.isShowCover = this.app.getSettings().showCover;
     }
 
     /**
@@ -57,7 +54,7 @@ export abstract class PageCollection {
         }
 
         let start = 0;
-        if (this.isShowCover) {
+        if (this.app.getSettings().showCover) {
             this.pages[0].setDensity(PageDensity.HARD);
             this.landscapeSpread.push([start]);
             start++;
@@ -70,6 +67,13 @@ export abstract class PageCollection {
                 this.pages[i].setDensity(PageDensity.HARD);
             }
         }
+    }
+
+    /**
+     * Recalculate spread layout (e.g. after showCover change)
+     */
+    public recreateSpread(): void {
+        this.createSpread();
     }
 
     /**

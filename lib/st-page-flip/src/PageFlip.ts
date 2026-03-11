@@ -346,6 +346,17 @@ export class PageFlip extends EventObject {
     }
 
     /**
+     * Toggle showCover at runtime, recalculating page spreads
+     */
+    public setShowCover(enabled: boolean): void {
+        if (this.setting.showCover === enabled) return;
+        this.updateSetting('showCover', enabled);
+        this.pages.recreateSpread();
+        this.pages.show(this.pages.getCurrentPageIndex());
+        this.render.update();
+    }
+
+    /**
      * Get UI object
      *
      * @returns {UI}
