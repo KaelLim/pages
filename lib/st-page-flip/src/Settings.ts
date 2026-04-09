@@ -68,6 +68,9 @@ export interface FlipSetting {
 
     /** Number of pages to preload ahead/behind the current view. 0 = preload all at once */
     preloadRange: number;
+
+    /** Number of leading blank pages to exclude from edge progress calculation */
+    edgePageOffset: number;
 }
 
 export class Settings {
@@ -97,6 +100,7 @@ export class Settings {
         showEdge: false,
         edgeWidth: 10,
         preloadRange: 3,
+        edgePageOffset: 0,
     };
 
     /**

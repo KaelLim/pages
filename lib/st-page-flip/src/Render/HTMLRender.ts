@@ -78,12 +78,28 @@ export class HTMLRender extends Render {
         }
 
         const rect = this.getRect();
-        const pageCount = this.app.getPageCount();
-        const currentPage = this.app.getCurrentPageIndex();
+        const offset = this.getSettings().edgePageOffset || 0;
+        const pageCount = Math.max(this.app.getPageCount() - offset, 1);
+        const currentPage = Math.max(this.app.getCurrentPageIndex() - offset, 0);
         const maxWidth = this.getSettings().edgeWidth;
         const rtl = this.getSettings().rtl;
 
         let readProgress = currentPage / Math.max(pageCount - 1, 1);
+
+        // During flip animation, interpolate edge width toward destination
+        if (this.flippingPage !== null && this.shadow !== null) {
+            const flipT = Math.min(this.shadow.progress / 2, 100) / 100; // 0→1
+            // Each flip moves 2 page indices (one spread)
+            const step = 2 / Math.max(pageCount - 1, 1);
+
+            if (this.direction === FlipDirection.FORWARD) {
+                readProgress += step * flipT;
+            } else {
+                readProgress -= step * flipT;
+            }
+            readProgress = Math.max(0, Math.min(1, readProgress));
+        }
+
         if (rtl) readProgress = 1 - readProgress;
 
         const readW = Math.round(readProgress * maxWidth);
@@ -112,7 +128,7 @@ export class HTMLRender extends Render {
 
         // Position at outer edges of the book (fore-edges)
         // Hide edge when no pages on that side
-        if (leftWidth <= 0) {
+        if (leftWidth < 2) {
             this.leftEdge.style.cssText = 'display: none';
         } else {
             this.leftEdge.style.cssText = `
@@ -134,7 +150,7 @@ export class HTMLRender extends Render {
             `;
         }
 
-        if (rightWidth <= 0) {
+        if (rightWidth < 2) {
             this.rightEdge.style.cssText = 'display: none';
         } else {
             this.rightEdge.style.cssText = `
@@ -244,6 +260,11 @@ export class HTMLRender extends Render {
      * Draw inner shadow to the soft page
      */
     private drawInnerShadow(): void {
+        if (this.shadow.width < 2 || this.shadow.opacity < 0.01) {
+            this.innerShadow.style.cssText = 'display: none';
+            return;
+        }
+
         const rect = this.getRect();
 
         const innerShadowSize = (this.shadow.width * 3) / 4;
@@ -308,6 +329,11 @@ export class HTMLRender extends Render {
      * Draw outer shadow to the soft page
      */
     private drawOuterShadow(): void {
+        if (this.shadow.width < 2 || this.shadow.opacity < 0.01) {
+            this.outerShadow.style.cssText = 'display: none';
+            return;
+        }
+
         const rect = this.getRect();
 
         const shadowPos = this.convertToGlobal({ x: this.shadow.pos.x, y: this.shadow.pos.y });

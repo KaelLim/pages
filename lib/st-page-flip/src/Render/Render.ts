@@ -261,11 +261,11 @@ export abstract class Render {
         }
 
         this.boundsRect = {
-            left,
-            top: middlePoint.y - pageHeight / 2,
-            width: pageWidth * 2,
-            height: pageHeight,
-            pageWidth: pageWidth,
+            left: Math.round(left),
+            top: Math.round(middlePoint.y - pageHeight / 2),
+            width: Math.round(pageWidth * 2),
+            height: Math.round(pageHeight),
+            pageWidth: Math.round(pageWidth),
         };
 
         return orientation;

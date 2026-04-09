@@ -114,6 +114,20 @@ async function init() {
       // Build DOM with placeholder divs (only fill cached pages immediately)
       currentPageMap = [];
       const pageDivs = [];
+
+      // Insert a transparent page at the front so the first spread is
+      // [blank | page1] instead of [page1] alone. This avoids the
+      // single-page-spread edge case where flippingPage === bottomPage
+      // (same DOM element) which breaks the soft flip animation.
+      if (!rtl) {
+        const blankDiv = document.createElement('div');
+        blankDiv.dataset.density = 'soft';
+        blankDiv.className = 'page page-blank';
+        bookEl.appendChild(blankDiv);
+        currentPageMap.push(0);
+        pageDivs.push(blankDiv);
+      }
+
       for (const num of pageNums) {
         const div = document.createElement('div');
         div.dataset.density = 'soft';
@@ -128,10 +142,18 @@ async function init() {
         pageDivs.push(div);
       }
 
-      const totalBookPages = pageNums.length;
+      if (rtl) {
+        const blankDiv = document.createElement('div');
+        blankDiv.dataset.density = 'soft';
+        blankDiv.className = 'page page-blank';
+        bookEl.appendChild(blankDiv);
+        currentPageMap.push(0);
+        pageDivs.push(blankDiv);
+      }
 
-      // RTL: P1 is at the end of reversed entries and must display alone.
-      const useShowCover = rtl ? (totalBookPages % 2 === 0) : true;
+      const totalBookPages = pageDivs.length;
+
+      const useShowCover = false;
       currentShowCover = useShowCover;
 
       pageFlip = new St.PageFlip(bookEl, {
@@ -151,6 +173,7 @@ async function init() {
         useMouseEvents: mouseEvents,
         showEdge: true,
         edgeWidth: Math.min(Math.ceil(numPages / 4), 20),
+        edgePageOffset: rtl ? 0 : 1,
         preloadRange: 3,
         startPage: targetOriginalPage !== undefined
           ? currentPageMap.indexOf(targetOriginalPage)
@@ -332,14 +355,21 @@ async function init() {
         : (idx % 2 === 0));
 
       if (isSpreadStart && idx + 1 < total) {
-        const page2 = currentPageMap[idx + 1];
-        const lo = Math.min(page1, page2);
-        const hi = Math.max(page1, page2);
-        pageInfoEl.textContent = `${lo}-${hi} / ${numPages}`;
-        pageSlider.value = lo;
+        const page2 = currentPageMap[idx + 1] || 0;
+        if (!page1 || !page2 || page1 === page2) {
+          const real = page1 || page2 || 1;
+          pageInfoEl.textContent = `${real} / ${numPages}`;
+          pageSlider.value = real;
+        } else {
+          const lo = Math.min(page1, page2);
+          const hi = Math.max(page1, page2);
+          pageInfoEl.textContent = `${lo}-${hi} / ${numPages}`;
+          pageSlider.value = lo;
+        }
       } else {
-        pageInfoEl.textContent = `${page1} / ${numPages}`;
-        pageSlider.value = page1;
+        const displayPage = page1 || 1;
+        pageInfoEl.textContent = `${displayPage} / ${numPages}`;
+        pageSlider.value = displayPage;
       }
     }
 
@@ -460,6 +490,7 @@ async function init() {
       const imgWrap = document.createElement('div');
       imgWrap.className = pages.length === 1 ? 'thumb-single' : 'thumb-spread';
       for (const pageNum of pages) {
+        if (pageNum === 0) continue;
         const img = document.createElement('img');
         if (renderedPages.has(pageNum)) {
           img.src = renderedPages.get(pageNum);
@@ -472,8 +503,8 @@ async function init() {
 
       const label = document.createElement('div');
       label.className = 'thumb-label';
-      const sorted = [...pages].sort((a, b) => a - b);
-      label.textContent = sorted.length > 1 ? `${sorted[0]}-${sorted[1]}` : sorted[0];
+      const realPages = pages.filter(p => p > 0).sort((a, b) => a - b);
+      label.textContent = realPages.length > 1 ? `${realPages[0]}-${realPages[1]}` : (realPages[0] || '');
       item.appendChild(label);
 
       item.addEventListener('click', () => {
