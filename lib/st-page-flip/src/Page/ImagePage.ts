@@ -1,7 +1,7 @@
 import { CanvasRender } from '../Render/CanvasRender';
 import { Page, PageDensity, PageOrientation } from './Page';
 import { Render } from '../Render/Render';
-import { Point } from '../BasicTypes';
+import { CurlData, Point } from '../BasicTypes';
 
 /**
  * Class representing a book page as an image on Canvas
@@ -20,6 +20,12 @@ export class ImagePage extends Page {
     }
 
     public draw(tempDensity?: PageDensity): void {
+        // Use curl rendering when curl data is available
+        if (this.state.curlData !== null && this.state.curlData.intensity > 0) {
+            this.drawCurled(this.state.curlData);
+            return;
+        }
+
         const ctx = (this.render as CanvasRender).getContext();
 
         const pagePos = this.render.convertToGlobal(this.state.position);
@@ -45,6 +51,82 @@ export class ImagePage extends Page {
             this.drawLoader(ctx, { x: 0, y: 0 }, pageWidth, pageHeight);
         } else {
             ctx.drawImage(this.image, 0, 0, pageWidth, pageHeight);
+        }
+
+        ctx.restore();
+    }
+
+    /**
+     * Draw the page with curl deformation using mesh strips.
+     * Each strip is a vertical slice of the page image, drawn with
+     * rotation and lighting to simulate paper bending.
+     */
+    public drawCurled(curlData: CurlData): void {
+        const ctx = (this.render as CanvasRender).getContext();
+        const pageWidth = this.render.getRect().pageWidth;
+        const pageHeight = this.render.getRect().height;
+        const pagePos = this.render.convertToGlobal(this.state.position);
+
+        if (!this.isLoad) {
+            this.drawLoader(ctx, { x: pagePos.x, y: pagePos.y }, pageWidth, pageHeight);
+            return;
+        }
+
+        ctx.save();
+        ctx.translate(pagePos.x, pagePos.y);
+        ctx.rotate(this.state.angle);
+
+        // Clip to the page polygon (same as flat rendering)
+        ctx.beginPath();
+        for (let p of this.state.area) {
+            if (p !== null) {
+                p = this.render.convertToGlobal(p);
+                ctx.lineTo(p.x - pagePos.x, p.y - pagePos.y);
+            }
+        }
+        ctx.clip();
+
+        const imgW = this.image.naturalWidth;
+        const imgH = this.image.naturalHeight;
+
+        // Draw each mesh strip with its own transform
+        for (const strip of curlData.strips) {
+            const srcX = strip.t * imgW;
+            const srcW = (strip.width / pageWidth) * imgW;
+
+            ctx.save();
+
+            // Position at strip's x location with curl lift
+            ctx.translate(strip.x, strip.yOffset);
+
+            // Rotate strip around its left edge to simulate curl
+            if (strip.angle !== 0) {
+                ctx.rotate(strip.angle);
+            }
+
+            // Draw the strip slice of the source image
+            ctx.drawImage(
+                this.image,
+                srcX, 0, srcW, imgH,         // source rect
+                0, 0, strip.width, pageHeight // dest rect
+            );
+
+            // Apply lighting overlay
+            if (strip.light !== 1.0) {
+                if (strip.light > 1.0) {
+                    // Highlight — white overlay
+                    const alpha = Math.min((strip.light - 1.0) * 0.5, 0.15);
+                    ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+                    ctx.fillRect(0, 0, strip.width, pageHeight);
+                } else {
+                    // Shadow — dark overlay
+                    const alpha = 1.0 - strip.light;
+                    ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
+                    ctx.fillRect(0, 0, strip.width, pageHeight);
+                }
+            }
+
+            ctx.restore();
         }
 
         ctx.restore();
