@@ -3,6 +3,7 @@
   display: block;
   box-sizing: border-box;
   transform: translateZ(0);
+  background: transparent;
 
   -ms-touch-action: pan-y;
   touch-action: pan-y;
@@ -21,6 +22,8 @@
   height: 100%;
   left: 0;
   top: 0;
+  background: transparent;
+  border: none;
 }
 
 .stf__block {
