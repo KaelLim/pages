@@ -47,17 +47,17 @@ export class ImagePage extends Page {
 
         ctx.clip();
 
-        // Fill clipped area so blank pages mask static pages underneath.
-        // Real page images fully cover this fill.
-        const bg = this.render.getSettings().canvasBgColor;
-        if (bg === 'transparent') {
-            ctx.clearRect(0, 0, pageWidth, pageHeight);
-        } else {
-            ctx.fillStyle = bg;
-            ctx.fillRect(0, 0, pageWidth, pageHeight);
-        }
-
         if (!this.isLoad) {
+            // Only fill background for unloaded/blank pages to mask static pages.
+            // Loaded images fully cover the clip area — filling first would
+            // erase static page pixels and cause subpixel gaps at fold lines.
+            const bg = this.render.getSettings().canvasBgColor;
+            if (bg === 'transparent') {
+                ctx.clearRect(0, 0, pageWidth, pageHeight);
+            } else {
+                ctx.fillStyle = bg;
+                ctx.fillRect(0, 0, pageWidth, pageHeight);
+            }
             this.drawLoader(ctx, { x: 0, y: 0 }, pageWidth, pageHeight);
         } else {
             ctx.drawImage(this.image, 0, 0, pageWidth, pageHeight);
@@ -115,25 +115,29 @@ export class ImagePage extends Page {
                 ctx.rotate(strip.angle);
             }
 
+            // Compensate height for rotation — rotated strips are shorter
+            // at the bottom, so extend to prevent gaps at fold line
+            const h = strip.angle !== 0
+                ? pageHeight / Math.cos(Math.abs(strip.angle)) + 1
+                : pageHeight;
+
             // Draw the strip slice of the source image
             ctx.drawImage(
                 this.image,
-                srcX, 0, srcW, imgH,         // source rect
-                0, 0, strip.width, pageHeight // dest rect
+                srcX, 0, srcW, imgH,      // source rect
+                0, 0, strip.width, h       // dest rect (extended)
             );
 
             // Apply lighting overlay
             if (strip.light !== 1.0) {
                 if (strip.light > 1.0) {
-                    // Highlight — white overlay
                     const alpha = Math.min((strip.light - 1.0) * 0.5, 0.15);
                     ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-                    ctx.fillRect(0, 0, strip.width, pageHeight);
+                    ctx.fillRect(0, 0, strip.width, h);
                 } else {
-                    // Shadow — dark overlay
                     const alpha = 1.0 - strip.light;
                     ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
-                    ctx.fillRect(0, 0, strip.width, pageHeight);
+                    ctx.fillRect(0, 0, strip.width, h);
                 }
             }
 

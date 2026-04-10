@@ -210,6 +210,11 @@ export class PageFlip extends EventObject {
      */
     public turnToPage(page: number): void {
         this.pages.show(this.pages.realToInternal(page));
+
+        // Snap edge progress instantly (no lerp) for direct page jumps
+        if (this.render instanceof CanvasRender) {
+            (this.render as CanvasRender).snapEdgeProgress();
+        }
     }
 
     /**

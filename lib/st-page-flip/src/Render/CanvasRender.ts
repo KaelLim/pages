@@ -11,6 +11,9 @@ export class CanvasRender extends Render {
     private readonly canvas: HTMLCanvasElement;
     private readonly ctx: CanvasRenderingContext2D;
 
+    /** Smoothed edge reading progress (0-1), lerps toward target each frame */
+    private edgeProgress: number = 0;
+
     constructor(app: PageFlip, setting: FlipSetting, inCanvas: HTMLCanvasElement) {
         super(app, setting);
 
@@ -24,6 +27,14 @@ export class CanvasRender extends Render {
 
     public reload(): void {
         //
+    }
+
+    /** Snap edge progress to current reading position (skip lerp) */
+    public snapEdgeProgress(): void {
+        const offset = this.getSettings().edgePageOffset || 0;
+        const pageCount = Math.max(this.app.getPageCount() - offset, 1);
+        const currentPage = Math.max(this.app.getCurrentPageIndex() - offset, 0);
+        this.edgeProgress = currentPage / Math.max(pageCount - 1, 1);
     }
 
     protected drawFrame(): void {
@@ -85,6 +96,189 @@ export class CanvasRender extends Render {
         }
 
         this.ctx.restore();
+
+        // Edges drawn outside main clip so they appear at book fore-edges
+        this.drawEdges();
+    }
+
+    /**
+     * Draw page-thickness edges at the left and right fore-edges of the book
+     */
+    private drawEdges(): void {
+        if (!this.getSettings().showEdge) return;
+        if (this.orientation === Orientation.PORTRAIT) return;
+
+        const rect = this.getRect();
+        const offset = this.getSettings().edgePageOffset || 0;
+        const pageCount = Math.max(this.app.getPageCount() - offset, 1);
+        const currentPage = Math.max(this.app.getCurrentPageIndex() - offset, 0);
+        const maxWidth = this.getSettings().edgeWidth;
+        const rtl = this.getSettings().rtl;
+
+        let targetProgress = currentPage / Math.max(pageCount - 1, 1);
+
+        // During flip animation, offset target toward destination
+        if (this.flippingPage !== null && this.shadow !== null) {
+            const flipT = Math.min(this.shadow.progress / 2, 100) / 100;
+            const step = 2 / Math.max(pageCount - 1, 1);
+
+            if (this.direction === FlipDirection.FORWARD) {
+                targetProgress += step * flipT;
+            } else {
+                targetProgress -= step * flipT;
+            }
+        }
+        targetProgress = Math.max(0, Math.min(1, targetProgress));
+
+        // Smooth lerp toward target (handles large page jumps gracefully)
+        const lerpSpeed = 0.12;
+        const diff = targetProgress - this.edgeProgress;
+        if (Math.abs(diff) < 0.001) {
+            this.edgeProgress = targetProgress;
+        } else {
+            this.edgeProgress += diff * lerpSpeed;
+        }
+
+        // Hide edges during large jumps (lerp still far from target)
+        if (Math.abs(diff) > 0.15) return;
+
+        let readProgress = rtl ? 1 - this.edgeProgress : this.edgeProgress;
+
+        const readW = Math.round(readProgress * maxWidth);
+        const unreadW = Math.round((1 - readProgress) * maxWidth);
+
+        const leftWidth = rtl ? unreadW : readW;
+        const rightWidth = rtl ? readW : unreadW;
+
+        if (leftWidth >= 2) {
+            this.drawSingleEdge(
+                rect.left - leftWidth + 1, rect.top,
+                leftWidth, rect.height, 'left'
+            );
+        }
+        if (rightWidth >= 2) {
+            this.drawSingleEdge(
+                rect.left + rect.width - 1, rect.top,
+                rightWidth, rect.height, 'right'
+            );
+        }
+    }
+
+    /**
+     * Draw one fore-edge with realistic page-layer texture and 3D depth
+     */
+    private drawSingleEdge(
+        x: number, y: number,
+        w: number, h: number,
+        side: 'left' | 'right'
+    ): void {
+        const ctx = this.ctx;
+        const isLeft = side === 'left';
+
+        ctx.save();
+        ctx.translate(x, y);
+
+        // ── Curved edge clip path ──
+        ctx.beginPath();
+        if (isLeft) {
+            ctx.moveTo(w, 0);
+            ctx.bezierCurveTo(w * 0.25, h * 0.015, 0, h * 0.035, 0, h * 0.05);
+            ctx.lineTo(0, h * 0.95);
+            ctx.bezierCurveTo(0, h * 0.965, w * 0.25, h * 0.985, w, h);
+            ctx.lineTo(w, 0);
+        } else {
+            ctx.moveTo(0, 0);
+            ctx.bezierCurveTo(w * 0.75, h * 0.015, w, h * 0.035, w, h * 0.05);
+            ctx.lineTo(w, h * 0.95);
+            ctx.bezierCurveTo(w, h * 0.965, w * 0.75, h * 0.985, 0, h);
+            ctx.lineTo(0, 0);
+        }
+        ctx.clip();
+
+        // ── Base paper fill ──
+        const baseGrad = ctx.createLinearGradient(
+            isLeft ? w : 0, 0, isLeft ? 0 : w, 0
+        );
+        baseGrad.addColorStop(0, '#f0ece4');
+        baseGrad.addColorStop(0.3, '#e8e3d8');
+        baseGrad.addColorStop(0.7, '#ddd8cc');
+        baseGrad.addColorStop(1, '#d0cabe');
+        ctx.fillStyle = baseGrad;
+        ctx.fillRect(0, 0, w, h);
+
+        // ── Page layer lines (varying opacity for realism) ──
+        const lineSpacing = Math.max(1.2, w / Math.max(w * 2.5, 1));
+        for (let lx = 0; lx < w; lx += lineSpacing) {
+            const depthT = isLeft ? lx / w : 1 - lx / w;
+            const alpha = 0.08 + depthT * 0.18;
+            ctx.strokeStyle = `rgba(120, 110, 95, ${alpha})`;
+            ctx.lineWidth = 0.4 + depthT * 0.3;
+            ctx.beginPath();
+            ctx.moveTo(lx, 0);
+            ctx.lineTo(lx, h);
+            ctx.stroke();
+        }
+
+        // ── Horizontal depth gradient (inner=light, outer=darker) ──
+        const depthGrad = ctx.createLinearGradient(
+            isLeft ? w : 0, 0, isLeft ? 0 : w, 0
+        );
+        depthGrad.addColorStop(0, 'rgba(255,255,255,0.15)');
+        depthGrad.addColorStop(0.2, 'rgba(255,255,255,0.05)');
+        depthGrad.addColorStop(0.6, 'rgba(0,0,0,0.04)');
+        depthGrad.addColorStop(1, 'rgba(0,0,0,0.15)');
+        ctx.fillStyle = depthGrad;
+        ctx.fillRect(0, 0, w, h);
+
+        // ── Vertical lighting gradient (top/bottom darker) ──
+        const vGrad = ctx.createLinearGradient(0, 0, 0, h);
+        vGrad.addColorStop(0, 'rgba(0,0,0,0.25)');
+        vGrad.addColorStop(0.06, 'rgba(0,0,0,0.12)');
+        vGrad.addColorStop(0.15, 'rgba(0,0,0,0.03)');
+        vGrad.addColorStop(0.5, 'rgba(255,255,255,0.06)');
+        vGrad.addColorStop(0.85, 'rgba(0,0,0,0.03)');
+        vGrad.addColorStop(0.94, 'rgba(0,0,0,0.12)');
+        vGrad.addColorStop(1, 'rgba(0,0,0,0.25)');
+        ctx.fillStyle = vGrad;
+        ctx.fillRect(0, 0, w, h);
+
+        // ── Inner highlight line near spine ──
+        const hlX = isLeft ? w - 0.5 : 0.5;
+        const hlGrad = ctx.createLinearGradient(0, 0, 0, h);
+        hlGrad.addColorStop(0, 'rgba(255,255,255,0)');
+        hlGrad.addColorStop(0.1, 'rgba(255,255,255,0.3)');
+        hlGrad.addColorStop(0.5, 'rgba(255,255,255,0.4)');
+        hlGrad.addColorStop(0.9, 'rgba(255,255,255,0.3)');
+        hlGrad.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.strokeStyle = hlGrad;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(hlX, h * 0.05);
+        ctx.lineTo(hlX, h * 0.95);
+        ctx.stroke();
+
+        ctx.restore();
+
+        // ── Outer shadow along the fore-edge ──
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.shadowColor = 'rgba(0,0,0,0.25)';
+        ctx.shadowBlur = 3;
+        ctx.shadowOffsetX = isLeft ? -1.5 : 1.5;
+        ctx.shadowOffsetY = 0;
+
+        ctx.beginPath();
+        const outerX = isLeft ? 0 : w;
+        ctx.moveTo(outerX, h * 0.05);
+        ctx.bezierCurveTo(
+            outerX, h * 0.3,
+            outerX, h * 0.7,
+            outerX, h * 0.95
+        );
+        ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+        ctx.restore();
     }
 
     private drawBookShadow(): void {

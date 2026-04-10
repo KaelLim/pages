@@ -126,7 +126,7 @@ async function init() {
         autoSize: true,
         usePortrait: true,
         useMouseEvents: mouseEvents,
-        showEdge: false,
+        showEdge: true,
         preloadRange: 3,
         startPage: 0,
         curlIntensity: 0.5,
@@ -346,7 +346,8 @@ async function init() {
 
       flipSound();
       lastSoundTime = Date.now();
-      pageFlip.flip(targetIdx);
+      pageFlip.turnToPage(targetIdx);
+      updatePageInfo();
     }
 
     function goLast() {
@@ -355,7 +356,8 @@ async function init() {
 
       flipSound();
       lastSoundTime = Date.now();
-      pageFlip.flip(targetIdx);
+      pageFlip.turnToPage(targetIdx);
+      updatePageInfo();
     }
 
     updatePageInfo();
@@ -408,15 +410,7 @@ async function init() {
       }
     });
 
-    const btnSinglePage = document.getElementById('btn-single-page');
-    let isSinglePage = false;
-    btnSinglePage.addEventListener('click', () => {
-      isSinglePage = !isSinglePage;
-      pageFlip.setForceSinglePage(isSinglePage);
-      btnSinglePage.innerHTML = `<span class="material-symbols-rounded">${isSinglePage ? 'menu_book' : 'auto_stories'}</span>`;
-      btnSinglePage.style.background = isSinglePage ? 'rgba(255,255,255,0.25)' : '';
-      updatePageInfo();
-    });
+    // Single page toggle removed — mobile auto-switches via usePortrait
 
     // Thumbnail overlay
     const thumbOverlay = document.getElementById('thumbnail-overlay');
