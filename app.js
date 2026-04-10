@@ -119,7 +119,7 @@ async function init() {
         maxWidth: pageWidth,
         minHeight: Math.round(250 * (pageHeight / pageWidth)),
         maxHeight: pageHeight,
-        flippingTime: 450,
+        flippingTime: 5000,
         maxShadowOpacity: 0.3,
         showCover: false,
         mobileScrollSupport: false,
@@ -130,7 +130,7 @@ async function init() {
         preloadRange: 3,
         startPage: 0,
         curlIntensity: 0.5,
-        meshStripCount: 20,
+        meshStripCount: 150,
         canvasBgColor: 'transparent',
       });
 

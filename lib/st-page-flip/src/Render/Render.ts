@@ -220,9 +220,16 @@ export abstract class Render {
         const forceSingle = this.app.getSettings().forceSinglePage;
 
         const blockWidth = this.getBlockWidth();
+        const blockHeight = this.getBlockHeight();
+
+        // If canvas was extended for curl room, use original height
+        // for book sizing but full height for centering.
+        const el = this.app.getUI().getDistElement();
+        const bookHeight = parseInt((el as HTMLElement).dataset?.bookHeight || '0', 10) || blockHeight;
+
         const middlePoint: Point = {
             x: blockWidth / 2,
-            y: this.getBlockHeight() / 2,
+            y: blockHeight / 2, // center in full canvas
         };
 
         const ratio = this.setting.width / this.setting.height;
@@ -245,8 +252,8 @@ export abstract class Render {
             if (pageWidth > this.setting.maxWidth) pageWidth = this.setting.maxWidth;
 
             pageHeight = pageWidth / ratio;
-            if (pageHeight > this.getBlockHeight()) {
-                pageHeight = this.getBlockHeight();
+            if (pageHeight > bookHeight) {
+                pageHeight = bookHeight; // constrain to original height, not extended
                 pageWidth = pageHeight * ratio;
             }
 

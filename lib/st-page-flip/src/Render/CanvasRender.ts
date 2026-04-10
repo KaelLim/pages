@@ -35,32 +35,23 @@ export class CanvasRender extends Render {
         const leftIsBlank = pc.isBlankPage(idx);
         const rightIsBlank = pc.isBlankPage(idx + 1);
 
-        // During animation, use full book area so flipping page can
-        // render across both sides. When static and a blank page is
-        // showing, clip to only the real page half.
         const isAnimating = this.flippingPage !== null;
         this.ctx.save();
         this.ctx.beginPath();
-        if (!isAnimating && leftIsBlank && this.orientation !== Orientation.PORTRAIT) {
-            this.ctx.rect(
-                bookRect.left + bookRect.pageWidth,
-                bookRect.top + 1,
-                bookRect.pageWidth - 1,
-                bookRect.height - 2
-            );
-        } else if (!isAnimating && rightIsBlank && this.orientation !== Orientation.PORTRAIT) {
-            this.ctx.rect(
-                bookRect.left + 1,
-                bookRect.top + 1,
-                bookRect.pageWidth - 1,
-                bookRect.height - 2
-            );
+
+        if (!isAnimating && this.orientation !== Orientation.PORTRAIT
+            && (leftIsBlank || rightIsBlank)) {
+            // Static blank spread: clip to real page half only
+            const clipX = leftIsBlank
+                ? bookRect.left + bookRect.pageWidth
+                : bookRect.left + 1;
+            this.ctx.rect(clipX, 0, bookRect.pageWidth - 1, this.canvas.height);
         } else {
+            // Clip left/right to prevent spine subpixel artifact,
+            // but extend top/bottom to full canvas for curl room.
             this.ctx.rect(
-                bookRect.left + 1,
-                bookRect.top + 1,
-                bookRect.width - 2,
-                bookRect.height - 2
+                bookRect.left + 1, 0,
+                bookRect.width - 2, this.canvas.height
             );
         }
         this.ctx.clip();

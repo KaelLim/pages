@@ -22,13 +22,14 @@ body {
   min-height: 0;
   position: relative;
   padding-top: 12px;
-  overflow: hidden;
+  overflow: visible;
   /* Test background image — canvas is transparent so this shows through */
   background: url('https://picsum.photos/1920/1080') center/cover no-repeat;
 }
 
 #book-area.zoom-mode {
   cursor: grab;
+  overflow: hidden;
 }
 
 #book-area.zoom-mode:active {
