@@ -3,6 +3,7 @@ import { PageFlip } from '../PageFlip';
 import { Helper } from '../Helper';
 import { PageRect, Point } from '../BasicTypes';
 import { FlipCalculation } from './FlipCalculation';
+import { CurlCalculation } from './CurlCalculation';
 import { Page, PageDensity } from '../Page/Page';
 
 /**
@@ -208,6 +209,23 @@ export class Flip {
                 progress,
                 this.calc.getDirection()
             );
+
+            // Compute curl data for Canvas rendering
+            const settings = this.app.getSettings();
+            if (settings.curlIntensity > 0) {
+                const rect = this.getBoundsRect();
+                const [foldTop, foldBottom] = this.calc.getFoldLine();
+                const curlData = CurlCalculation.calc(
+                    foldTop,
+                    foldBottom,
+                    progress,
+                    rect.pageWidth,
+                    rect.height,
+                    settings.curlIntensity,
+                    settings.meshStripCount
+                );
+                this.flippingPage.setCurlData(curlData);
+            }
         }
     }
 

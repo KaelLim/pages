@@ -1,5 +1,5 @@
 import { Render } from '../Render/Render';
-import { Point } from '../BasicTypes';
+import { Point, CurlData } from '../BasicTypes';
 
 /**
  * State of the page on the basis of which rendering
@@ -19,6 +19,9 @@ export interface PageState {
 
     /** Rotate angle for hard pages at renedering time */
     hardDrawingAngle: number;
+
+    /** Curl deformation data for Canvas rendering */
+    curlData: CurlData | null;
 }
 
 export const enum PageOrientation {
@@ -58,6 +61,7 @@ export abstract class Page {
             position: { x: 0, y: 0 },
             hardAngle: 0,
             hardDrawingAngle: 0,
+            curlData: null,
         };
 
         this.createdDensity = density;
@@ -124,11 +128,18 @@ export abstract class Page {
 
     /**
      * Set page crop area
-     * 
-     * @param {Point[]} area 
+     *
+     * @param {Point[]} area
      */
     public setArea(area: Point[]): void {
         this.state.area = area;
+    }
+
+    /**
+     * Set curl deformation data
+     */
+    public setCurlData(curlData: CurlData | null): void {
+        this.state.curlData = curlData;
     }
 
     /**

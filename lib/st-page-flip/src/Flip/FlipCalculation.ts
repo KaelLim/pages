@@ -225,6 +225,17 @@ export class FlipCalculation {
         return Math.PI - angle;
     }
 
+    /**
+     * Get the fold line endpoints (top and bottom intersection points).
+     * Used by CurlCalculation to compute the bezier fold curve.
+     */
+    public getFoldLine(): [Point, Point] {
+        return [
+            this.topIntersectPoint || { x: this.pageWidth, y: 0 },
+            this.bottomIntersectPoint || { x: this.pageWidth, y: this.pageHeight },
+        ];
+    }
+
     private calcAngleAndPosition(pos: Point): Point {
         let result = pos;
 
