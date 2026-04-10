@@ -80,6 +80,9 @@ export interface FlipSetting {
 
     /** Number of vertical strips for mesh deformation. Default 20 */
     meshStripCount: number;
+
+    /** Canvas background color. Used by clear() and blank page fill. */
+    canvasBgColor: string;
 }
 
 export class Settings {
@@ -113,6 +116,7 @@ export class Settings {
         forceSinglePage: false,
         curlIntensity: 0.5,
         meshStripCount: 20,
+        canvasBgColor: '#fff',
     };
 
     /**

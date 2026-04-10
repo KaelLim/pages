@@ -131,6 +131,7 @@ async function init() {
         startPage: 0,
         curlIntensity: 0.5,
         meshStripCount: 20,
+        canvasBgColor: 'transparent',
       });
 
       // Lazy render: load PDF pages on demand via canvas API

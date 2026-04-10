@@ -29,16 +29,51 @@ export class CanvasRender extends Render {
     protected drawFrame(): void {
         this.clear();
 
-        if (this.orientation !== Orientation.PORTRAIT)
-            if (this.leftPage != null) this.leftPage.simpleDraw(PageOrientation.LEFT);
+        const bookRect = this.getRect();
+        const pc = this.app.getPageCollection();
+        const idx = pc.getCurrentPageIndex();
+        const leftIsBlank = pc.isBlankPage(idx);
+        const rightIsBlank = pc.isBlankPage(idx + 1);
 
-        if (this.rightPage != null) this.rightPage.simpleDraw(PageOrientation.RIGHT);
+        // During animation, use full book area so flipping page can
+        // render across both sides. When static and a blank page is
+        // showing, clip to only the real page half.
+        const isAnimating = this.flippingPage !== null;
+        this.ctx.save();
+        this.ctx.beginPath();
+        if (!isAnimating && leftIsBlank && this.orientation !== Orientation.PORTRAIT) {
+            this.ctx.rect(
+                bookRect.left + bookRect.pageWidth,
+                bookRect.top + 1,
+                bookRect.pageWidth - 1,
+                bookRect.height - 2
+            );
+        } else if (!isAnimating && rightIsBlank && this.orientation !== Orientation.PORTRAIT) {
+            this.ctx.rect(
+                bookRect.left + 1,
+                bookRect.top + 1,
+                bookRect.pageWidth - 1,
+                bookRect.height - 2
+            );
+        } else {
+            this.ctx.rect(
+                bookRect.left + 1,
+                bookRect.top + 1,
+                bookRect.width - 2,
+                bookRect.height - 2
+            );
+        }
+        this.ctx.clip();
+
+        if (this.orientation !== Orientation.PORTRAIT)
+            if (this.leftPage != null && !leftIsBlank) this.leftPage.simpleDraw(PageOrientation.LEFT);
+
+        if (this.rightPage != null && !rightIsBlank) this.rightPage.simpleDraw(PageOrientation.RIGHT);
 
         if (this.bottomPage != null) this.bottomPage.draw();
 
         this.drawBookShadow();
 
-        // Draw curl lift shadow before the flipping page
         if (this.shadow != null) {
             this.drawCurlShadow();
         }
@@ -50,16 +85,22 @@ export class CanvasRender extends Render {
             this.drawInnerShadow();
         }
 
-        const rect = this.getRect();
-
         if (this.orientation === Orientation.PORTRAIT) {
             this.ctx.beginPath();
-            this.ctx.rect(rect.left + rect.pageWidth, rect.top, rect.width, rect.height);
+            this.ctx.rect(bookRect.left + bookRect.pageWidth, bookRect.top, bookRect.width, bookRect.height);
             this.ctx.clip();
         }
+
+        this.ctx.restore();
     }
 
     private drawBookShadow(): void {
+        // Skip spine shadow when either side is a blank page
+        // (first/last spread has only one real page)
+        const pc = this.app.getPageCollection();
+        const idx = pc.getCurrentPageIndex();
+        if (pc.isBlankPage(idx) || pc.isBlankPage(idx + 1)) return;
+
         const rect = this.getRect();
 
         this.ctx.save();
@@ -211,7 +252,12 @@ export class CanvasRender extends Render {
     }
 
     private clear(): void {
-        this.ctx.fillStyle = '#1a1a2e';
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        const bg = this.getSettings().canvasBgColor;
+        if (bg === 'transparent') {
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        } else {
+            this.ctx.fillStyle = bg;
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        }
     }
 }

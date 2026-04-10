@@ -47,6 +47,16 @@ export class ImagePage extends Page {
 
         ctx.clip();
 
+        // Fill clipped area so blank pages mask static pages underneath.
+        // Real page images fully cover this fill.
+        const bg = this.render.getSettings().canvasBgColor;
+        if (bg === 'transparent') {
+            ctx.clearRect(0, 0, pageWidth, pageHeight);
+        } else {
+            ctx.fillStyle = bg;
+            ctx.fillRect(0, 0, pageWidth, pageHeight);
+        }
+
         if (!this.isLoad) {
             this.drawLoader(ctx, { x: 0, y: 0 }, pageWidth, pageHeight);
         } else {
@@ -74,9 +84,8 @@ export class ImagePage extends Page {
 
         ctx.save();
         ctx.translate(pagePos.x, pagePos.y);
-        ctx.rotate(this.state.angle);
 
-        // Clip to the page polygon (same as flat rendering)
+        // Build clip path BEFORE rotating (must match original draw() order)
         ctx.beginPath();
         for (let p of this.state.area) {
             if (p !== null) {
@@ -84,6 +93,8 @@ export class ImagePage extends Page {
                 ctx.lineTo(p.x - pagePos.x, p.y - pagePos.y);
             }
         }
+
+        ctx.rotate(this.state.angle);
         ctx.clip();
 
         const imgW = this.image.naturalWidth;
