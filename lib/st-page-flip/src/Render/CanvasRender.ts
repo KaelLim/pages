@@ -63,6 +63,7 @@ export class CanvasRender extends Render {
 
         if (this.bottomPage != null) this.bottomPage.draw();
 
+        // Spine shadow: behind flipping page (normal depth)
         this.drawBookShadow();
 
         if (this.shadow != null) {
@@ -75,6 +76,7 @@ export class CanvasRender extends Render {
             this.drawOuterShadow();
             this.drawInnerShadow();
         }
+
 
         if (this.orientation === Orientation.PORTRAIT) {
             this.ctx.beginPath();

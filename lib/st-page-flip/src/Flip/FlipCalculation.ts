@@ -333,10 +333,10 @@ export class FlipCalculation {
 
     private calculateIntersectPoint(pos: Point): void {
         const boundRect: Rect = {
-            left: -1,
-            top: -1,
-            width: this.pageWidth + 2,
-            height: this.pageHeight + 2,
+            left: -0.1,
+            top: -0.1,
+            width: this.pageWidth + 0.2,
+            height: this.pageHeight + 0.2,
         };
 
         if (this.corner === FlipCorner.TOP) {

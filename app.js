@@ -119,7 +119,7 @@ async function init() {
         maxWidth: pageWidth,
         minHeight: Math.round(250 * (pageHeight / pageWidth)),
         maxHeight: pageHeight,
-        flippingTime: 5000,
+        flippingTime: 450,
         maxShadowOpacity: 0.3,
         showCover: false,
         mobileScrollSupport: false,

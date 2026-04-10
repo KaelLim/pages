@@ -21,7 +21,7 @@ body {
   align-items: center;
   min-height: 0;
   position: relative;
-  padding-top: 12px;
+  padding: 12px 0;
   overflow: visible;
   /* Test background image — canvas is transparent so this shows through */
   background: url('https://picsum.photos/1920/1080') center/cover no-repeat;
