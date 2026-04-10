@@ -74,6 +74,12 @@ export interface FlipSetting {
 
     /** Force single-page (portrait) display regardless of window width */
     forceSinglePage: boolean;
+
+    /** Curl bend intensity (0 = flat flip, 1 = deep curl). Default 0.5 */
+    curlIntensity: number;
+
+    /** Number of vertical strips for mesh deformation. Default 20 */
+    meshStripCount: number;
 }
 
 export class Settings {
@@ -105,6 +111,8 @@ export class Settings {
         preloadRange: 3,
         edgePageOffset: 0,
         forceSinglePage: false,
+        curlIntensity: 0.5,
+        meshStripCount: 20,
     };
 
     /**
