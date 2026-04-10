@@ -38,6 +38,11 @@ export class CanvasRender extends Render {
 
         this.drawBookShadow();
 
+        // Draw curl lift shadow before the flipping page
+        if (this.shadow != null) {
+            this.drawCurlShadow();
+        }
+
         if (this.flippingPage != null) this.flippingPage.draw();
 
         if (this.shadow != null) {
@@ -69,10 +74,11 @@ export class CanvasRender extends Render {
         const outerGradient = this.ctx.createLinearGradient(0, 0, shadowSize, 0);
 
         outerGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-        outerGradient.addColorStop(0.4, 'rgba(0, 0, 0, 0.2)');
-        outerGradient.addColorStop(0.49, 'rgba(0, 0, 0, 0.1)');
-        outerGradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.5)');
-        outerGradient.addColorStop(0.51, 'rgba(0, 0, 0, 0.4)');
+        outerGradient.addColorStop(0.3, 'rgba(0, 0, 0, 0.15)');
+        outerGradient.addColorStop(0.45, 'rgba(0, 0, 0, 0.25)');
+        outerGradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.6)');
+        outerGradient.addColorStop(0.55, 'rgba(0, 0, 0, 0.25)');
+        outerGradient.addColorStop(0.7, 'rgba(0, 0, 0, 0.15)');
         outerGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
         this.ctx.clip();
@@ -156,6 +162,50 @@ export class CanvasRender extends Render {
 
         this.ctx.fillStyle = innerGradient;
         this.ctx.fillRect(0, 0, isw, rect.height * 2);
+
+        this.ctx.restore();
+    }
+
+    /**
+     * Draw a soft shadow under the curling page to simulate it lifting
+     * off the surface. Only drawn when curl data is available.
+     */
+    private drawCurlShadow(): void {
+        if (this.flippingPage === null || this.pageRect === null) return;
+
+        const state = (this.flippingPage as any).state;
+        if (!state?.curlData || state.curlData.intensity < 0.05) return;
+
+        const rect = this.getRect();
+        const curlData = state.curlData;
+
+        this.ctx.save();
+
+        // Clip to book area
+        this.ctx.beginPath();
+        this.ctx.rect(rect.left, rect.top, rect.width, rect.height);
+        this.ctx.clip();
+
+        // Soft shadow under the lifted page
+        const shadowBlur = 8 * curlData.intensity;
+        const shadowAlpha = 0.3 * curlData.intensity;
+
+        this.ctx.shadowColor = `rgba(0, 0, 0, ${shadowAlpha})`;
+        this.ctx.shadowBlur = shadowBlur;
+        this.ctx.shadowOffsetX = 2 * curlData.intensity;
+        this.ctx.shadowOffsetY = 4 * curlData.intensity;
+
+        // Draw a filled path matching the flipping page shape
+        const pageRect = this.convertRectToGlobal(this.pageRect);
+        this.ctx.beginPath();
+        this.ctx.moveTo(pageRect.topLeft.x, pageRect.topLeft.y);
+        this.ctx.lineTo(pageRect.topRight.x, pageRect.topRight.y);
+        this.ctx.lineTo(pageRect.bottomRight.x, pageRect.bottomRight.y);
+        this.ctx.lineTo(pageRect.bottomLeft.x, pageRect.bottomLeft.y);
+        this.ctx.closePath();
+
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0)';
+        this.ctx.fill();
 
         this.ctx.restore();
     }
