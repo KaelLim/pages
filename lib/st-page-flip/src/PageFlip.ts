@@ -329,6 +329,21 @@ export class PageFlip extends EventObject {
     }
 
     /**
+     * Update the image source for a page (lazy loading for canvas mode).
+     * Accepts a real (non-blank) page index.
+     *
+     * @param {number} realPageIndex - Real page index (excluding blanks)
+     * @param {string} src - Image URL or data URL
+     */
+    public updatePageImage(realPageIndex: number, src: string): void {
+        const internalIdx = this.pages.realToInternal(realPageIndex);
+        const page = this.pages.getPage(internalIdx);
+        if (page && 'setImageSrc' in page) {
+            (page as any).setImageSrc(src);
+        }
+    }
+
+    /**
      * Get the current rendering object
      *
      * @returns {Render}

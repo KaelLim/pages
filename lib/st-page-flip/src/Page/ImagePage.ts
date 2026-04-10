@@ -194,6 +194,18 @@ export class ImagePage extends Page {
             };
     }
 
+    /**
+     * Update the image source (for lazy loading).
+     * If the page was loaded with a placeholder, this replaces it.
+     */
+    public setImageSrc(src: string): void {
+        this.isLoad = false;
+        this.image.src = src;
+        this.image.onload = (): void => {
+            this.isLoad = true;
+        };
+    }
+
     public newTemporaryCopy(): Page {
         return this;
     }
