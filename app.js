@@ -76,18 +76,7 @@ async function init() {
     let currentPageMap = []; // maps flip index → original page number (0 = blank)
     let lastSoundTime = 0;
 
-    // Render a PDF page and fill it into the corresponding DOM element
-    async function renderPageInto(originalPageNum, imgEl) {
-      if (renderedPages.has(originalPageNum)) {
-        imgEl.src = renderedPages.get(originalPageNum);
-        return;
-      }
-      const pageData = await renderPageToImage(pdf, originalPageNum);
-      renderedPages.set(originalPageNum, pageData.dataUrl);
-      imgEl.src = pageData.dataUrl;
-    }
-
-    // Build page DOM elements and init StPageFlip
+    // Build page image array and init StPageFlip (Canvas mode)
     function buildBook(rtl, targetOriginalPage, mouseEvents = true) {
       // Destroy old instance to remove window-level event listeners
       const parentEl = bookEl.parentNode;
@@ -110,25 +99,17 @@ async function init() {
       for (let i = 1; i <= numPages; i++) pageNums.push(i);
       if (rtl) pageNums.reverse();
 
-      // Build DOM with placeholder divs (only fill cached pages immediately)
       currentPageMap = [];
-      const pageDivs = [];
-
       for (const num of pageNums) {
-        const div = document.createElement('div');
-        div.dataset.density = 'soft';
-        div.className = 'page';
-        const img = document.createElement('img');
-        if (renderedPages.has(num)) {
-          img.src = renderedPages.get(num);
-        }
-        div.appendChild(img);
-        bookEl.appendChild(div);
         currentPageMap.push(num);
-        pageDivs.push(div);
       }
+      const totalBookPages = currentPageMap.length;
 
-      const totalBookPages = pageDivs.length;
+      // Create image URL array — use cached renders or transparent placeholder
+      const placeholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+      const imageHrefs = currentPageMap.map(num =>
+        renderedPages.has(num) ? renderedPages.get(num) : placeholder
+      );
 
       pageFlip = window.__pageFlip = new St.PageFlip(bookEl, {
         width: pageWidth,
@@ -145,27 +126,31 @@ async function init() {
         autoSize: true,
         usePortrait: true,
         useMouseEvents: mouseEvents,
-        showEdge: true,
-        edgeWidth: Math.min(Math.ceil(numPages / 4), 20),
+        showEdge: false,
         preloadRange: 3,
         startPage: 0,
+        curlIntensity: 0.5,
+        meshStripCount: 20,
       });
-      // Lazy render: register BEFORE loadFromHTML so the synchronous
-      // emitRenderPages() during init is caught.
-      // Library emits real (non-blank) page indices directly.
-      pageFlip.on('renderPages', (e) => {
+
+      // Lazy render: load PDF pages on demand via canvas API
+      pageFlip.on('renderPages', async (e) => {
         const indices = e.data;
         for (const idx of indices) {
-          if (idx < 0 || idx >= pageDivs.length) continue;
+          if (idx < 0 || idx >= currentPageMap.length) continue;
           const originalPage = currentPageMap[idx];
-          const img = pageDivs[idx]?.querySelector('img');
-          if (originalPage && img && !img.getAttribute('src')) {
-            renderPageInto(originalPage, img);
+          if (!originalPage) continue;
+          if (renderedPages.has(originalPage)) {
+            pageFlip.updatePageImage(idx, renderedPages.get(originalPage));
+            continue;
           }
+          const pageData = await renderPageToImage(pdf, originalPage);
+          renderedPages.set(originalPage, pageData.dataUrl);
+          pageFlip.updatePageImage(idx, pageData.dataUrl);
         }
       });
 
-      pageFlip.loadFromHTML(bookEl.querySelectorAll('.page'));
+      pageFlip.loadFromImages(imageHrefs);
 
       if (targetOriginalPage !== undefined) {
         const realIdx = currentPageMap.indexOf(targetOriginalPage);
@@ -463,7 +448,10 @@ async function init() {
         if (renderedPages.has(pageNum)) {
           img.src = renderedPages.get(pageNum);
         } else {
-          renderPageInto(pageNum, img);
+          renderPageToImage(pdf, pageNum).then(data => {
+            renderedPages.set(pageNum, data.dataUrl);
+            img.src = data.dataUrl;
+          });
         }
         imgWrap.appendChild(img);
       }
