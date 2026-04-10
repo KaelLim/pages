@@ -464,25 +464,15 @@ export class HTMLRender extends Render {
 
         this.drawBottomPage();
 
-        // Near the end of flip animation, the clip-path becomes an extremely
-        // narrow sliver (1-2px) due to the expanded boundRect in
-        // FlipCalculation. Hide the flipping page and its shadows once
-        // progress exceeds 98% to prevent the thin line artifact.
-        const nearEnd = this.shadow !== null && this.shadow.progress > 196;
-
         if (this.flippingPage != null) {
-            if (nearEnd) {
-                (this.flippingPage as HTMLPage).getElement().style.cssText = 'display: none';
-            } else {
-                (this.flippingPage as HTMLPage).getElement().style.zIndex = (
-                    this.getSettings().startZIndex + 5
-                ).toString(10);
+            (this.flippingPage as HTMLPage).getElement().style.zIndex = (
+                this.getSettings().startZIndex + 5
+            ).toString(10);
 
-                this.flippingPage.draw();
-            }
+            this.flippingPage.draw();
         }
 
-        if (this.shadow != null && this.flippingPage !== null && !nearEnd) {
+        if (this.shadow != null && this.flippingPage !== null) {
             if (this.flippingPage.getDrawingDensity() === PageDensity.SOFT) {
                 this.drawOuterShadow();
                 this.drawInnerShadow();

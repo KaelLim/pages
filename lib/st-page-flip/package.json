@@ -1,19 +1,19 @@
 {
-  "name": "page-flip",
-  "version": "2.0.7",
+  "name": "flipbook",
+  "version": "3.0.0",
   "type": "module",
   "main": "dist/js/page-flip.browser.js",
   "browser": "dist/js/page-flip.browser.js",
   "module": "dist/js/page-flip.module.js",
   "types": "dist/types/PageFlip.d.ts",
-  "author": "oleg.litovski9@gmail.com",
+  "author": "KaelLim",
   "license": "MIT",
-  "description": "Powerful, simple and flexible JS Library for creating realistic and beautiful page turning effect",
+  "description": "High-performance flipbook engine with single-page toggle, RTL, lazy loading, and edge rendering",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Nodlik/StPageFlip.git"
+    "url": "https://github.com/KaelLim/flipbook.git"
   },
-  "homepage": "https://nodlik.github.io/StPageFlip/",
+  "homepage": "https://github.com/KaelLim/flipbook",
   "devDependencies": {
     "@rollup/plugin-terser": "^1.0.0",
     "@rollup/plugin-typescript": "^12.3.0",

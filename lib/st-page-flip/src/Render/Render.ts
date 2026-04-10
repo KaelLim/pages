@@ -217,6 +217,8 @@ export abstract class Render {
     private calculateBoundsRect(): Orientation {
         let orientation = Orientation.LANDSCAPE;
 
+        const forceSingle = this.app.getSettings().forceSinglePage;
+
         const blockWidth = this.getBlockWidth();
         const middlePoint: Point = {
             x: blockWidth / 2,
@@ -231,7 +233,8 @@ export abstract class Render {
         let left = middlePoint.x - pageWidth;
 
         if (this.setting.size === SizeType.STRETCH) {
-            if (blockWidth < this.setting.minWidth * 2 && this.app.getSettings().usePortrait)
+            if (forceSingle ||
+                (blockWidth < this.setting.minWidth * 2 && this.app.getSettings().usePortrait))
                 orientation = Orientation.PORTRAIT;
 
             pageWidth =
@@ -252,8 +255,8 @@ export abstract class Render {
                     ? middlePoint.x - pageWidth / 2 - pageWidth
                     : middlePoint.x - pageWidth;
         } else {
-            if (blockWidth < pageWidth * 2) {
-                if (this.app.getSettings().usePortrait) {
+            if (forceSingle || blockWidth < pageWidth * 2) {
+                if (forceSingle || this.app.getSettings().usePortrait) {
                     orientation = Orientation.PORTRAIT;
                     left = middlePoint.x - pageWidth / 2 - pageWidth;
                 }

@@ -71,6 +71,9 @@ export interface FlipSetting {
 
     /** Number of leading blank pages to exclude from edge progress calculation */
     edgePageOffset: number;
+
+    /** Force single-page (portrait) display regardless of window width */
+    forceSinglePage: boolean;
 }
 
 export class Settings {
@@ -101,6 +104,7 @@ export class Settings {
         edgeWidth: 10,
         preloadRange: 3,
         edgePageOffset: 0,
+        forceSinglePage: false,
     };
 
     /**

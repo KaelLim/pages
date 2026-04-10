@@ -72,9 +72,8 @@ async function init() {
     renderedPages.set(1, firstPage.dataUrl);
 
     let isRtl = false;
-    let pageFlip = null;
+    let pageFlip = window.__pageFlip = null;
     let currentPageMap = []; // maps flip index → original page number (0 = blank)
-    let currentShowCover = true;
     let lastSoundTime = 0;
 
     // Render a PDF page and fill it into the corresponding DOM element
@@ -115,19 +114,6 @@ async function init() {
       currentPageMap = [];
       const pageDivs = [];
 
-      // Insert a transparent page at the front so the first spread is
-      // [blank | page1] instead of [page1] alone. This avoids the
-      // single-page-spread edge case where flippingPage === bottomPage
-      // (same DOM element) which breaks the soft flip animation.
-      if (!rtl) {
-        const blankDiv = document.createElement('div');
-        blankDiv.dataset.density = 'soft';
-        blankDiv.className = 'page page-blank';
-        bookEl.appendChild(blankDiv);
-        currentPageMap.push(0);
-        pageDivs.push(blankDiv);
-      }
-
       for (const num of pageNums) {
         const div = document.createElement('div');
         div.dataset.density = 'soft';
@@ -142,21 +128,9 @@ async function init() {
         pageDivs.push(div);
       }
 
-      if (rtl) {
-        const blankDiv = document.createElement('div');
-        blankDiv.dataset.density = 'soft';
-        blankDiv.className = 'page page-blank';
-        bookEl.appendChild(blankDiv);
-        currentPageMap.push(0);
-        pageDivs.push(blankDiv);
-      }
-
       const totalBookPages = pageDivs.length;
 
-      const useShowCover = false;
-      currentShowCover = useShowCover;
-
-      pageFlip = new St.PageFlip(bookEl, {
+      pageFlip = window.__pageFlip = new St.PageFlip(bookEl, {
         width: pageWidth,
         height: pageHeight,
         size: 'stretch',
@@ -166,24 +140,23 @@ async function init() {
         maxHeight: pageHeight,
         flippingTime: 450,
         maxShadowOpacity: 0.3,
-        showCover: useShowCover,
+        showCover: false,
         mobileScrollSupport: false,
         autoSize: true,
         usePortrait: true,
         useMouseEvents: mouseEvents,
         showEdge: true,
         edgeWidth: Math.min(Math.ceil(numPages / 4), 20),
-        edgePageOffset: rtl ? 0 : 1,
         preloadRange: 3,
-        startPage: targetOriginalPage !== undefined
-          ? currentPageMap.indexOf(targetOriginalPage)
-          : (rtl ? totalBookPages - 1 : 0),
+        startPage: 0,
       });
       // Lazy render: register BEFORE loadFromHTML so the synchronous
-      // emitRenderPages() during init is caught
+      // emitRenderPages() during init is caught.
+      // Library emits real (non-blank) page indices directly.
       pageFlip.on('renderPages', (e) => {
         const indices = e.data;
         for (const idx of indices) {
+          if (idx < 0 || idx >= pageDivs.length) continue;
           const originalPage = currentPageMap[idx];
           const img = pageDivs[idx]?.querySelector('img');
           if (originalPage && img && !img.getAttribute('src')) {
@@ -193,6 +166,13 @@ async function init() {
       });
 
       pageFlip.loadFromHTML(bookEl.querySelectorAll('.page'));
+
+      if (targetOriginalPage !== undefined) {
+        const realIdx = currentPageMap.indexOf(targetOriginalPage);
+        if (realIdx >= 0) pageFlip.turnToPage(realIdx);
+      } else {
+        pageFlip.turnToPage(rtl ? totalBookPages - 1 : 0);
+      }
 
       pageFlip.on('flip', () => {
         const now = Date.now();
@@ -343,34 +323,23 @@ async function init() {
 
     function updatePageInfo() {
       const idx = pageFlip.getCurrentPageIndex();
-      const total = currentPageMap.length;
       const page1 = currentPageMap[idx] || 1;
 
-      // Portrait mode = single page, never show spread
       const isPortrait = pageFlip.getOrientation() === 'portrait';
 
-      // Check if current view is a spread (two pages visible, landscape only)
-      const isSpreadStart = !isPortrait && (currentShowCover
-        ? (idx > 0 && idx % 2 === 1)
-        : (idx % 2 === 0));
-
-      if (isSpreadStart && idx + 1 < total) {
-        const page2 = currentPageMap[idx + 1] || 0;
-        if (!page1 || !page2 || page1 === page2) {
-          const real = page1 || page2 || 1;
-          pageInfoEl.textContent = `${real} / ${numPages}`;
-          pageSlider.value = real;
-        } else {
+      if (!isPortrait && idx + 1 < currentPageMap.length) {
+        const page2 = currentPageMap[idx + 1];
+        if (page2 && page1 !== page2) {
           const lo = Math.min(page1, page2);
           const hi = Math.max(page1, page2);
           pageInfoEl.textContent = `${lo}-${hi} / ${numPages}`;
           pageSlider.value = lo;
+          return;
         }
-      } else {
-        const displayPage = page1 || 1;
-        pageInfoEl.textContent = `${displayPage} / ${numPages}`;
-        pageSlider.value = displayPage;
       }
+
+      pageInfoEl.textContent = `${page1} / ${numPages}`;
+      pageSlider.value = page1;
     }
 
     function flipNext() {
@@ -414,10 +383,9 @@ async function init() {
     // Page slider: instant jump while dragging, sound on release
     pageSlider.addEventListener('input', () => {
       const targetPage = parseInt(pageSlider.value);
-      const targetIdx = currentPageMap.indexOf(targetPage);
-      if (targetIdx >= 0) {
-        pageFlip.turnToPage(targetIdx);
-
+      const realIdx = currentPageMap.indexOf(targetPage);
+      if (realIdx >= 0) {
+        pageFlip.turnToPage(realIdx);
         updatePageInfo();
       }
     });
@@ -454,6 +422,16 @@ async function init() {
       }
     });
 
+    const btnSinglePage = document.getElementById('btn-single-page');
+    let isSinglePage = false;
+    btnSinglePage.addEventListener('click', () => {
+      isSinglePage = !isSinglePage;
+      pageFlip.setForceSinglePage(isSinglePage);
+      btnSinglePage.innerHTML = `<span class="material-symbols-rounded">${isSinglePage ? 'menu_book' : 'auto_stories'}</span>`;
+      btnSinglePage.style.background = isSinglePage ? 'rgba(255,255,255,0.25)' : '';
+      updatePageInfo();
+    });
+
     // Thumbnail overlay
     const thumbOverlay = document.getElementById('thumbnail-overlay');
     const thumbGrid = document.getElementById('thumbnail-grid');
@@ -462,22 +440,13 @@ async function init() {
     function buildThumbnails() {
       thumbGrid.innerHTML = '';
       const total = currentPageMap.length;
-      let i = 0;
 
-      // Cover is single when showCover is true
-      if (currentShowCover && total > 0) {
-        addThumbItem([currentPageMap[0]], 0);
-        i = 1;
-      }
-
-      // Pair remaining pages as spreads
-      while (i < total) {
+      // Pair pages as spreads
+      for (let i = 0; i < total; i += 2) {
         if (i + 1 < total) {
           addThumbItem([currentPageMap[i], currentPageMap[i + 1]], i);
-          i += 2;
         } else {
           addThumbItem([currentPageMap[i]], i);
-          i++;
         }
       }
     }
@@ -490,7 +459,6 @@ async function init() {
       const imgWrap = document.createElement('div');
       imgWrap.className = pages.length === 1 ? 'thumb-single' : 'thumb-spread';
       for (const pageNum of pages) {
-        if (pageNum === 0) continue;
         const img = document.createElement('img');
         if (renderedPages.has(pageNum)) {
           img.src = renderedPages.get(pageNum);
@@ -503,13 +471,12 @@ async function init() {
 
       const label = document.createElement('div');
       label.className = 'thumb-label';
-      const realPages = pages.filter(p => p > 0).sort((a, b) => a - b);
-      label.textContent = realPages.length > 1 ? `${realPages[0]}-${realPages[1]}` : (realPages[0] || '');
+      const sorted = [...pages].sort((a, b) => a - b);
+      label.textContent = sorted.length > 1 ? `${sorted[0]}-${sorted[1]}` : sorted[0];
       item.appendChild(label);
 
       item.addEventListener('click', () => {
         pageFlip.turnToPage(flipIdx);
-
         updatePageInfo();
         thumbOverlay.classList.add('hidden');
       });

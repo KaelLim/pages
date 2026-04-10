@@ -28,6 +28,8 @@
   height: 100%;
   box-sizing: border-box;
   perspective: 2000px;
+  overflow: hidden;
+  padding: 1px;
 }
 
 .stf__item {
@@ -58,4 +60,8 @@
   position: absolute;
   left: 0;
   top: 0;
+}
+
+.stf__item.--blank {
+  background: var(--stf-blank-bg, #000);
 }

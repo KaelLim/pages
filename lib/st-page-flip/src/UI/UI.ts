@@ -68,7 +68,7 @@ export abstract class UI {
      */
     public applySizing(): void {
         const setting = this.app.getSettings();
-        const k = setting.usePortrait ? 1 : 2;
+        const k = (setting.usePortrait || setting.forceSinglePage) ? 1 : 2;
 
         this.parentElement.style.minWidth = setting.minWidth * k + 'px';
         this.parentElement.style.minHeight = setting.minHeight + 'px';

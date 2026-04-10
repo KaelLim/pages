@@ -24,6 +24,18 @@ export class ImagePageCollection extends PageCollection {
             this.pages.push(page);
         }
 
+        this.addBlankPages();
         this.createSpread();
+    }
+
+    protected createBlankPage(): ImagePage {
+        const blank = new ImagePage(
+            this.render,
+            'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+            PageDensity.SOFT
+        );
+        blank.load();
+
+        return blank;
     }
 }
