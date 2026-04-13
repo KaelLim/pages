@@ -9,7 +9,7 @@ export interface PageState {
     angle: number;
 
     /** Page scope */
-    area: Point[];
+    area: (Point | null)[];
 
     /** Page position */
     position: Point;
@@ -47,7 +47,7 @@ export abstract class Page {
     protected render: Render;
 
     /** Page Orientation */
-    protected orientation: PageOrientation;
+    protected orientation!: PageOrientation;
 
     /** Density at creation */
     protected createdDensity: PageDensity;
@@ -131,7 +131,7 @@ export abstract class Page {
      *
      * @param {Point[]} area
      */
-    public setArea(area: Point[]): void {
+    public setArea(area: (Point | null)[]): void {
         this.state.area = area;
     }
 
@@ -192,6 +192,6 @@ export abstract class Page {
     }
 
     public abstract newTemporaryCopy(): Page;
-    public abstract getTemporaryCopy(): Page;
+    public abstract getTemporaryCopy(): Page | null;
     public abstract hideTemporaryCopy(): void;
 }

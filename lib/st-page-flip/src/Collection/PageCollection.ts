@@ -91,7 +91,7 @@ export abstract class PageCollection {
      */
     public isBlankPage(pageIndex: number): boolean {
         return pageIndex >= 0 && pageIndex < this.pages.length &&
-            this.blankPages.indexOf(this.pages[pageIndex]) >= 0;
+            this.blankPages.indexOf(this.pages[pageIndex]!) >= 0;
     }
 
     /**
@@ -168,11 +168,13 @@ export abstract class PageCollection {
      *
      * @param {number} pageNum - page index
      */
-    public getSpreadIndexByPage(pageNum: number): number {
+    public getSpreadIndexByPage(pageNum: number): number | null {
         const spread = this.getSpread();
 
-        for (let i = 0; i < spread.length; i++)
-            if (pageNum === spread[i][0] || pageNum === spread[i][1]) return i;
+        for (let i = 0; i < spread.length; i++) {
+            const s = spread[i]!;
+            if (pageNum === s[0] || pageNum === s[1]) return i;
+        }
 
         return null;
     }
@@ -198,7 +200,7 @@ export abstract class PageCollection {
      */
     public getPage(pageIndex: number): Page {
         if (pageIndex >= 0 && pageIndex < this.pages.length) {
-            return this.pages[pageIndex];
+            return this.pages[pageIndex]!;
         }
 
         throw new Error('Invalid page number');
@@ -209,10 +211,10 @@ export abstract class PageCollection {
      *
      * @param {Page} current
      */
-    public nextBy(current: Page): Page {
+    public nextBy(current: Page): Page | null {
         const idx = this.pages.indexOf(current);
 
-        if (idx < this.pages.length - 1) return this.pages[idx + 1];
+        if (idx < this.pages.length - 1) return this.pages[idx + 1]!;
 
         return null;
     }
@@ -222,10 +224,10 @@ export abstract class PageCollection {
      *
      * @param {Page} current
      */
-    public prevBy(current: Page): Page {
+    public prevBy(current: Page): Page | null {
         const idx = this.pages.indexOf(current);
 
-        if (idx > 0) return this.pages[idx - 1];
+        if (idx > 0) return this.pages[idx - 1]!;
 
         return null;
     }
@@ -240,24 +242,24 @@ export abstract class PageCollection {
         const spreads = this.getSpread();
 
         if (this.render.getOrientation() === Orientation.PORTRAIT) {
-            const curPageIdx = spreads[current][0];
+            const curPageIdx = spreads[current]![0]!;
             if (direction === FlipDirection.FORWARD) {
-                return this.pages[curPageIdx].newTemporaryCopy();
+                return this.pages[curPageIdx]!.newTemporaryCopy();
             } else {
-                const prevPageIdx = spreads[current - 1][0];
-                return this.pages[prevPageIdx];
+                const prevPageIdx = spreads[current - 1]![0]!;
+                return this.pages[prevPageIdx]!;
             }
         } else {
             const spread =
                 direction === FlipDirection.FORWARD
-                    ? spreads[current + 1]
-                    : spreads[current - 1];
+                    ? spreads[current + 1]!
+                    : spreads[current - 1]!;
 
-            if (spread.length === 1) return this.pages[spread[0]];
+            if (spread.length === 1) return this.pages[spread[0]!]!;
 
             return direction === FlipDirection.FORWARD
-                ? this.pages[spread[0]]
-                : this.pages[spread[1]];
+                ? this.pages[spread[0]!]!
+                : this.pages[spread[1]!]!;
         }
     }
 
@@ -272,20 +274,20 @@ export abstract class PageCollection {
 
         if (this.render.getOrientation() === Orientation.PORTRAIT) {
             const targetSpread = direction === FlipDirection.FORWARD
-                ? spreads[current + 1]
-                : spreads[current - 1];
-            return this.pages[targetSpread[0]];
+                ? spreads[current + 1]!
+                : spreads[current - 1]!;
+            return this.pages[targetSpread[0]!]!;
         } else {
             const spread =
                 direction === FlipDirection.FORWARD
-                    ? spreads[current + 1]
-                    : spreads[current - 1];
+                    ? spreads[current + 1]!
+                    : spreads[current - 1]!;
 
-            if (spread.length === 1) return this.pages[spread[0]];
+            if (spread.length === 1) return this.pages[spread[0]!]!;
 
             return direction === FlipDirection.FORWARD
-                ? this.pages[spread[1]]
-                : this.pages[spread[0]];
+                ? this.pages[spread[1]!]!
+                : this.pages[spread[0]!]!;
         }
     }
 
@@ -320,7 +322,7 @@ export abstract class PageCollection {
      * Show specified page
      * @param {number} pageNum - Page index (from 0s)
      */
-    public show(pageNum: number = null): void {
+    public show(pageNum: number | null = null): void {
         if (pageNum === null) pageNum = this.currentPageIndex;
 
         if (pageNum < 0 || pageNum >= this.pages.length) return;
@@ -372,27 +374,28 @@ export abstract class PageCollection {
      * Show current spread
      */
     private showSpread(): void {
-        const spread = this.getSpread()[this.currentSpreadIndex];
+        const spread = this.getSpread()[this.currentSpreadIndex]!;
 
         if (spread.length === 2) {
-            this.render.setLeftPage(this.pages[spread[0]]);
-            this.render.setRightPage(this.pages[spread[1]]);
+            this.render.setLeftPage(this.pages[spread[0]!]!);
+            this.render.setRightPage(this.pages[spread[1]!]!);
         } else {
+            const pageIdx = spread[0]!;
             if (this.render.getOrientation() === Orientation.LANDSCAPE) {
-                if (spread[0] === this.pages.length - 1) {
-                    this.render.setLeftPage(this.pages[spread[0]]);
+                if (pageIdx === this.pages.length - 1) {
+                    this.render.setLeftPage(this.pages[pageIdx]!);
                     this.render.setRightPage(null);
                 } else {
                     this.render.setLeftPage(null);
-                    this.render.setRightPage(this.pages[spread[0]]);
+                    this.render.setRightPage(this.pages[pageIdx]!);
                 }
             } else {
                 this.render.setLeftPage(null);
-                this.render.setRightPage(this.pages[spread[0]]);
+                this.render.setRightPage(this.pages[pageIdx]!);
             }
         }
 
-        this.currentPageIndex = spread[0];
+        this.currentPageIndex = spread[0]!;
         this.app.updatePageIndex(this.currentPageIndex);
     }
 }

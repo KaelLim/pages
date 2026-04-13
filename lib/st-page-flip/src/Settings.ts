@@ -127,7 +127,13 @@ export class Settings {
      */
     public getSettings(userSetting: Record<string, number | string | boolean>): FlipSetting {
         const result = this._default;
-        Object.assign(result, userSetting);
+        // Whitelist merge: only copy known setting keys to prevent prototype pollution
+        const allowedKeys = new Set(Object.keys(this._default));
+        for (const key of Object.keys(userSetting)) {
+            if (allowedKeys.has(key)) {
+                (result as any)[key] = userSetting[key];
+            }
+        }
 
         if (result.size !== SizeType.STRETCH && result.size !== SizeType.FIXED)
             throw new Error('Invalid size type. Available only "fixed" and "stretch" value');

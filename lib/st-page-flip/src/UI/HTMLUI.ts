@@ -19,7 +19,7 @@ export class HTMLUI extends UI {
         // Second wrapper to HTML page
         this.wrapper.insertAdjacentHTML('afterbegin', '<div class="stf__block"></div>');
 
-        this.distElement = inBlock.querySelector('.stf__block');
+        this.distElement = inBlock.querySelector('.stf__block')!;
 
         this.items = items;
         for (const item of items) {

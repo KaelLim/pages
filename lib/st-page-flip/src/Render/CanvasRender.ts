@@ -40,6 +40,11 @@ export class CanvasRender extends Render {
     protected drawFrame(): void {
         this.clear();
 
+        // Match canvas buffer scale (2x minimum for crisp text)
+        const dpr = Math.max(2, window.devicePixelRatio || 1);
+        this.ctx.save();
+        this.ctx.scale(dpr, dpr);
+
         const bookRect = this.getRect();
         const pc = this.app.getPageCollection();
         const idx = pc.getCurrentPageIndex();
@@ -50,19 +55,22 @@ export class CanvasRender extends Render {
         this.ctx.save();
         this.ctx.beginPath();
 
+        // Logical canvas height (CSS pixels, not physical)
+        const logicalH = this.canvas.height / Math.max(2, window.devicePixelRatio || 1);
+
         if (!isAnimating && this.orientation !== Orientation.PORTRAIT
             && (leftIsBlank || rightIsBlank)) {
             // Static blank spread: clip to real page half only
             const clipX = leftIsBlank
                 ? bookRect.left + bookRect.pageWidth
                 : bookRect.left + 1;
-            this.ctx.rect(clipX, 0, bookRect.pageWidth - 1, this.canvas.height);
+            this.ctx.rect(clipX, 0, bookRect.pageWidth - 1, logicalH);
         } else {
             // Clip left/right to prevent spine subpixel artifact,
             // but extend top/bottom to full canvas for curl room.
             this.ctx.rect(
                 bookRect.left + 1, 0,
-                bookRect.width - 2, this.canvas.height
+                bookRect.width - 2, logicalH
             );
         }
         this.ctx.clip();
@@ -99,6 +107,8 @@ export class CanvasRender extends Render {
 
         // Edges drawn outside main clip so they appear at book fore-edges
         this.drawEdges();
+
+        this.ctx.restore(); // HiDPI dpr scale
     }
 
     /**
@@ -112,35 +122,19 @@ export class CanvasRender extends Render {
         const offset = this.getSettings().edgePageOffset || 0;
         const pageCount = Math.max(this.app.getPageCount() - offset, 1);
         const currentPage = Math.max(this.app.getCurrentPageIndex() - offset, 0);
-        const maxWidth = this.getSettings().edgeWidth;
+        // Scale edge thickness by page count — thin books get thin edges.
+        // edgeWidth is the max for a ~200+ page book; fewer pages = proportionally thinner.
+        const configMax = this.getSettings().edgeWidth;
+        const maxWidth = Math.max(2, Math.min(configMax, configMax * (pageCount / 200)));
         const rtl = this.getSettings().rtl;
 
-        let targetProgress = currentPage / Math.max(pageCount - 1, 1);
+        const targetProgress = Math.max(0, Math.min(1,
+            currentPage / Math.max(pageCount - 1, 1)
+        ));
 
-        // During flip animation, offset target toward destination
-        if (this.flippingPage !== null && this.shadow !== null) {
-            const flipT = Math.min(this.shadow.progress / 2, 100) / 100;
-            const step = 2 / Math.max(pageCount - 1, 1);
-
-            if (this.direction === FlipDirection.FORWARD) {
-                targetProgress += step * flipT;
-            } else {
-                targetProgress -= step * flipT;
-            }
-        }
-        targetProgress = Math.max(0, Math.min(1, targetProgress));
-
-        // Smooth lerp toward target (handles large page jumps gracefully)
-        const lerpSpeed = 0.12;
-        const diff = targetProgress - this.edgeProgress;
-        if (Math.abs(diff) < 0.001) {
-            this.edgeProgress = targetProgress;
-        } else {
-            this.edgeProgress += diff * lerpSpeed;
-        }
-
-        // Hide edges during large jumps (lerp still far from target)
-        if (Math.abs(diff) > 0.15) return;
+        // Snap edge immediately — real books transfer one page of
+        // thickness from one side to the other in one discrete step.
+        this.edgeProgress = targetProgress;
 
         let readProgress = rtl ? 1 - this.edgeProgress : this.edgeProgress;
 

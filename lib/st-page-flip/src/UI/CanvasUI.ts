@@ -11,9 +11,9 @@ export class CanvasUI extends UI {
     constructor(inBlock: HTMLElement, app: PageFlip, setting: FlipSetting) {
         super(inBlock, app, setting);
 
-        this.wrapper.innerHTML = '<canvas class="stf__canvas"></canvas>';
+        this.wrapper.innerHTML = '<canvas class="stf__canvas" role="img" aria-label="Interactive page flip viewer"></canvas>';
 
-        this.canvas = inBlock.querySelectorAll('canvas')[0];
+        this.canvas = inBlock.querySelectorAll('canvas')[0]!;
 
         this.distElement = this.canvas;
 
@@ -37,8 +37,13 @@ export class CanvasUI extends UI {
         const curlPad = Math.round(height * 0.08);
         const totalHeight = height + curlPad * 2;
 
-        this.canvas.width = width;
-        this.canvas.height = totalHeight;
+        // Render at 2x minimum for crisp text, or higher if screen demands it
+        const dpr = Math.max(2, window.devicePixelRatio || 1);
+        this.canvas.width = Math.round(width * dpr);
+        this.canvas.height = Math.round(totalHeight * dpr);
+
+        // CSS keeps the canvas at its logical size
+        this.canvas.style.width = `${width}px`;
         this.canvas.style.height = `${totalHeight}px`;
         this.canvas.style.marginTop = `-${curlPad}px`;
     }

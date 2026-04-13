@@ -9,9 +9,9 @@ import { Point } from '../BasicTypes';
  */
 export class HTMLPage extends Page {
     private readonly element: HTMLElement;
-    private copiedElement: HTMLElement = null;
+    private copiedElement: HTMLElement | null = null;
 
-    private temporaryCopy: Page = null;
+    private temporaryCopy: Page | null = null;
 
     private isLoad = false;
 
@@ -30,7 +30,7 @@ export class HTMLPage extends Page {
 
         if (this.temporaryCopy === null) {
             this.copiedElement = this.element.cloneNode(true) as HTMLElement;
-            this.element.parentElement.appendChild(this.copiedElement);
+            this.element.parentElement!.appendChild(this.copiedElement);
 
             this.temporaryCopy = new HTMLPage(
                 this.render,
@@ -39,16 +39,16 @@ export class HTMLPage extends Page {
             );
         }
 
-        return this.getTemporaryCopy();
+        return this.getTemporaryCopy()!;
     }
 
-    public getTemporaryCopy(): Page {
+    public getTemporaryCopy(): Page | null {
         return this.temporaryCopy;
     }
 
     public hideTemporaryCopy(): void {
         if (this.temporaryCopy !== null) {
-            this.copiedElement.remove();
+            this.copiedElement!.remove();
             this.copiedElement = null;
             this.temporaryCopy = null;
         }
@@ -57,7 +57,7 @@ export class HTMLPage extends Page {
     public draw(tempDensity?: PageDensity): void {
         const density = tempDensity ? tempDensity : this.nowDrawingDensity;
 
-        const pagePos = this.render.convertToGlobal(this.state.position);
+        const pagePos = this.render.convertToGlobal(this.state.position)!;
         const pageWidth = this.render.getRect().pageWidth;
         const pageHeight = this.render.getRect().height;
 

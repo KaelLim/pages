@@ -58,33 +58,33 @@ export abstract class Render {
     protected readonly app: PageFlip;
 
     /** Left static book page */
-    protected leftPage: Page = null;
+    protected leftPage: Page | null = null;
     /** Right static book page */
-    protected rightPage: Page = null;
+    protected rightPage: Page | null = null;
 
     /** Page currently flipping */
-    protected flippingPage: Page = null;
+    protected flippingPage: Page | null = null;
     /** Next page at the time of flipping */
-    protected bottomPage: Page = null;
+    protected bottomPage: Page | null = null;
 
     /** Current flipping direction */
-    protected direction: FlipDirection = null;
+    protected direction: FlipDirection | null = null;
     /** Current book orientation */
-    protected orientation: Orientation = null;
+    protected orientation: Orientation | null = null;
     /** Сurrent state of the shadows */
-    protected shadow: Shadow = null;
+    protected shadow: Shadow | null = null;
     /** Сurrent animation process */
-    protected animation: AnimationProcess = null;
+    protected animation: AnimationProcess | null = null;
     /** Page borders while flipping */
-    protected pageRect: RectPoints = null;
+    protected pageRect: RectPoints | null = null;
     /** Current book area */
-    private boundsRect: PageRect = null;
+    private boundsRect: PageRect | null = null;
 
     /** Timer started from start of rendering */
     protected timer = 0;
 
     /** RequestAnimationFrame ID for cancellation */
-    private rafId: number = null;
+    private rafId: number | null = null;
 
     /**
      * Safari browser definitions for resolving a bug with a css property clip-area
@@ -125,9 +125,9 @@ export abstract class Render {
             );
 
             if (frameIndex < this.animation.frames.length) {
-                this.animation.frames[frameIndex]();
+                this.animation.frames[frameIndex]?.();
             } else {
-                this.animation.onAnimateEnd();
+                this.animation.onAnimateEnd?.();
                 this.animation = null;
             }
         }
@@ -188,7 +188,7 @@ export abstract class Render {
      */
     public finishAnimation(): void {
         if (this.animation !== null) {
-            this.animation.frames[this.animation.frames.length - 1]();
+            this.animation.frames[this.animation.frames.length - 1]?.();
 
             if (this.animation.onAnimateEnd !== null) {
                 this.animation.onAnimateEnd();
@@ -337,7 +337,7 @@ export abstract class Render {
     /**
      * Get current flipping direction
      */
-    public getDirection(): FlipDirection {
+    public getDirection(): FlipDirection | null {
         return this.direction;
     }
 
@@ -347,7 +347,7 @@ export abstract class Render {
     public getRect(): PageRect {
         if (this.boundsRect === null) this.calculateBoundsRect();
 
-        return this.boundsRect;
+        return this.boundsRect!;
     }
 
     /**
@@ -360,7 +360,7 @@ export abstract class Render {
     /**
      * Get current book orientation
      */
-    public getOrientation(): Orientation {
+    public getOrientation(): Orientation | null {
         return this.orientation;
     }
 
@@ -387,7 +387,7 @@ export abstract class Render {
      *
      * @param page
      */
-    public setRightPage(page: Page): void {
+    public setRightPage(page: Page | null): void {
         if (page !== null) page.setOrientation(PageOrientation.RIGHT);
 
         this.rightPage = page;
@@ -397,7 +397,7 @@ export abstract class Render {
      * Set left static book page
      * @param page
      */
-    public setLeftPage(page: Page): void {
+    public setLeftPage(page: Page | null): void {
         if (page !== null) page.setOrientation(PageOrientation.LEFT);
 
         this.leftPage = page;
@@ -407,7 +407,7 @@ export abstract class Render {
      * Set next page at the time of flipping
      * @param page
      */
-    public setBottomPage(page: Page): void {
+    public setBottomPage(page: Page | null): void {
         if (page !== null)
             page.setOrientation(
                 this.direction === FlipDirection.BACK ? PageOrientation.LEFT : PageOrientation.RIGHT
@@ -421,7 +421,7 @@ export abstract class Render {
      *
      * @param page
      */
-    public setFlippingPage(page: Page): void {
+    public setFlippingPage(page: Page | null): void {
         if (page !== null)
             page.setOrientation(
                 this.direction === FlipDirection.FORWARD &&
@@ -460,7 +460,7 @@ export abstract class Render {
      *
      * @returns {Point} Coordinates relative to the work page
      */
-    public convertToPage(pos: Point, direction?: FlipDirection): Point {
+    public convertToPage(pos: Point, direction?: FlipDirection | null): Point {
         if (!direction) direction = this.direction;
 
         const rect = this.getRect();
@@ -483,7 +483,7 @@ export abstract class Render {
      *
      * @returns {Point} Global coordinates relative to the window
      */
-    public convertToGlobal(pos: Point, direction?: FlipDirection): Point {
+    public convertToGlobal(pos: Point | null, direction?: FlipDirection | null): Point | null {
         if (!direction) direction = this.direction;
 
         if (pos == null) return null;
@@ -509,14 +509,14 @@ export abstract class Render {
      *
      * @returns {RectPoints} Coordinates of the corners of the rectangle relative to the window
      */
-    public convertRectToGlobal(rect: RectPoints, direction?: FlipDirection): RectPoints {
+    public convertRectToGlobal(rect: RectPoints, direction?: FlipDirection | null): RectPoints {
         if (!direction) direction = this.direction;
 
         return {
-            topLeft: this.convertToGlobal(rect.topLeft, direction),
-            topRight: this.convertToGlobal(rect.topRight, direction),
-            bottomLeft: this.convertToGlobal(rect.bottomLeft, direction),
-            bottomRight: this.convertToGlobal(rect.bottomRight, direction),
+            topLeft: this.convertToGlobal(rect.topLeft, direction)!,
+            topRight: this.convertToGlobal(rect.topRight, direction)!,
+            bottomLeft: this.convertToGlobal(rect.bottomLeft, direction)!,
+            bottomRight: this.convertToGlobal(rect.bottomRight, direction)!,
         };
     }
 }

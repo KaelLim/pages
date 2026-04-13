@@ -20,6 +20,7 @@ export class CurlCalculation {
      * @param pageHeight - Current page height in pixels
      * @param intensity - Curl bend intensity (0-1, from settings)
      * @param stripCount - Number of mesh strips (from settings)
+     * @param isForward - true if flipping forward (right→left)
      */
     public static calc(
         foldTop: Point,
@@ -28,14 +29,15 @@ export class CurlCalculation {
         pageWidth: number,
         pageHeight: number,
         intensity: number,
-        stripCount: number
+        stripCount: number,
+        isForward: boolean = false
     ): CurlData {
         const foldCurve = CurlCalculation.calcFoldCurve(
             foldTop, foldBottom, progress, pageWidth, intensity
         );
 
         const strips = CurlCalculation.calcStrips(
-            progress, pageWidth, pageHeight, intensity, stripCount
+            progress, pageWidth, pageHeight, intensity, stripCount, isForward
         );
 
         return {
@@ -85,13 +87,18 @@ export class CurlCalculation {
     /**
      * Calculate mesh strip positions and rotations.
      * Strips near the fold edge rotate more (page curls away from surface).
+     *
+     * @param isForward - When true (right→left flip), curl increases from
+     *   strip 0 (fold edge, left) to strip N (spine, right). When false
+     *   (left→right flip), curl increases from strip N to strip 0.
      */
     private static calcStrips(
         progress: number,
         pageWidth: number,
         pageHeight: number,
         intensity: number,
-        stripCount: number
+        stripCount: number,
+        isForward: boolean
     ): CurlStrip[] {
         const strips: CurlStrip[] = [];
         const stripWidth = pageWidth / stripCount;
@@ -100,8 +107,12 @@ export class CurlCalculation {
         for (let i = 0; i < stripCount; i++) {
             const t = i / stripCount;
 
-            // Strips near the fold edge curl more (power curve)
-            const curlT = Math.pow(t, 2);
+            // curlT: 0 at spine side, 1 at fold edge
+            // FORWARD (right→left): fold edge is at low i (left), spine at high i (right)
+            // BACK (left→right):    fold edge is at high i (right), spine at low i (left)
+            const curlT = isForward
+                ? Math.pow(1 - t, 2)   // invert: strip 0 = max curl
+                : Math.pow(t, 2);      // normal: strip N = max curl
 
             // Max rotation ~30 degrees at max curl
             const maxAngle = (Math.PI / 6) * curlFactor;

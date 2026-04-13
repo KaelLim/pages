@@ -46,10 +46,10 @@ export class Flip {
     private readonly render: Render;
     private readonly app: PageFlip;
 
-    private flippingPage: Page = null;
-    private bottomPage: Page = null;
+    private flippingPage: Page | null = null;
+    private bottomPage: Page | null = null;
 
-    private calc: FlipCalculation = null;
+    private calc: FlipCalculation | null = null;
 
     private state: FlippingState = FlippingState.READ;
 
@@ -94,12 +94,12 @@ export class Flip {
 
         // Defining animation start points
         const yStart =
-            this.calc.getCorner() === FlipCorner.BOTTOM ? rect.height - topMargins : topMargins;
+            this.calc!.getCorner() === FlipCorner.BOTTOM ? rect.height - topMargins : topMargins;
 
-        const yDest = this.calc.getCorner() === FlipCorner.BOTTOM ? rect.height : 0;
+        const yDest = this.calc!.getCorner() === FlipCorner.BOTTOM ? rect.height : 0;
 
         // Сalculations for these points
-        this.calc.calc({ x: rect.pageWidth - topMargins, y: yStart });
+        this.calc!.calc({ x: rect.pageWidth - topMargins, y: yStart });
 
         // Run flipping animation
         this.animateFlippingTo(
@@ -183,19 +183,19 @@ export class Flip {
             // Perform calculations for a specific position
             const progress = this.calc.getFlippingProgress();
 
-            this.bottomPage.setArea(this.calc.getBottomClipArea());
-            this.bottomPage.setPosition(this.calc.getBottomPagePosition());
-            this.bottomPage.setAngle(0);
-            this.bottomPage.setHardAngle(0);
+            this.bottomPage!.setArea(this.calc.getBottomClipArea());
+            this.bottomPage!.setPosition(this.calc.getBottomPagePosition());
+            this.bottomPage!.setAngle(0);
+            this.bottomPage!.setHardAngle(0);
 
-            this.flippingPage.setArea(this.calc.getFlippingClipArea());
-            this.flippingPage.setPosition(this.calc.getActiveCorner());
-            this.flippingPage.setAngle(this.calc.getAngle());
+            this.flippingPage!.setArea(this.calc.getFlippingClipArea());
+            this.flippingPage!.setPosition(this.calc.getActiveCorner());
+            this.flippingPage!.setAngle(this.calc.getAngle());
 
             if (this.calc.getDirection() === FlipDirection.FORWARD) {
-                this.flippingPage.setHardAngle((90 * (200 - progress * 2)) / 100);
+                this.flippingPage!.setHardAngle((90 * (200 - progress * 2)) / 100);
             } else {
-                this.flippingPage.setHardAngle((-90 * (200 - progress * 2)) / 100);
+                this.flippingPage!.setHardAngle((-90 * (200 - progress * 2)) / 100);
             }
 
             this.render.setPageRect(this.calc.getRect());
@@ -222,9 +222,10 @@ export class Flip {
                     rect.pageWidth,
                     rect.height,
                     settings.curlIntensity,
-                    settings.meshStripCount
+                    settings.meshStripCount,
+                    this.calc!.getDirection() === FlipDirection.FORWARD
                 );
-                this.flippingPage.setCurlData(curlData);
+                this.flippingPage!.setCurlData(curlData);
             }
         }
     }
@@ -238,6 +239,7 @@ export class Flip {
     public flipToPage(page: number, corner: FlipCorner): void {
         const current = this.app.getPageCollection().getCurrentSpreadIndex();
         const next = this.app.getPageCollection().getSpreadIndexByPage(page);
+        if (next === null) return;
 
         try {
             if (next > current) {
@@ -318,13 +320,13 @@ export class Flip {
 
                 this.setState(FlippingState.FOLD_CORNER);
 
-                this.calc.calc({ x: pageWidth - 1, y: 1 });
+                this.calc!.calc({ x: pageWidth - 1, y: 1 });
 
                 const fixedCornerSize = 50;
-                const yStart = this.calc.getCorner() === FlipCorner.BOTTOM ? rect.height - 1 : 1;
+                const yStart = this.calc!.getCorner() === FlipCorner.BOTTOM ? rect.height - 1 : 1;
 
                 const yDest =
-                    this.calc.getCorner() === FlipCorner.BOTTOM
+                    this.calc!.getCorner() === FlipCorner.BOTTOM
                         ? rect.height - fixedCornerSize
                         : fixedCornerSize;
 
@@ -390,7 +392,7 @@ export class Flip {
     /**
      * Get the current calculations object
      */
-    public getCalculation(): FlipCalculation {
+    public getCalculation(): FlipCalculation | null {
         return this.calc;
     }
 

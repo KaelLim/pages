@@ -9,7 +9,7 @@ export type DataType = number | string | boolean | object;
  * Type of object in event handlers
  */
 export interface WidgetEvent {
-    data: DataType;
+    data: DataType | null;
     object: PageFlip;
 }
 
@@ -31,7 +31,7 @@ export abstract class EventObject {
         if (!this.events.has(eventName)) {
             this.events.set(eventName, [callback]);
         } else {
-            this.events.get(eventName).push(callback);
+            this.events.get(eventName)!.push(callback);
         }
 
         return this;
@@ -46,10 +46,10 @@ export abstract class EventObject {
         this.events.delete(event);
     }
 
-    protected trigger(eventName: string, app: PageFlip, data: DataType = null): void {
+    protected trigger(eventName: string, app: PageFlip, data: DataType | null = null): void {
         if (!this.events.has(eventName)) return;
 
-        for (const callback of this.events.get(eventName)) {
+        for (const callback of this.events.get(eventName)!) {
             callback({ data, object: app });
         }
     }

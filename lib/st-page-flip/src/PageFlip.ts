@@ -22,18 +22,18 @@ import './Style/stPageFlip.css';
  * @extends EventObject
  */
 export class PageFlip extends EventObject {
-    private mousePosition: Point;
+    private mousePosition: Point = { x: 0, y: 0 };
     private isUserTouch = false;
     private isUserMove = false;
 
-    private setting: FlipSetting = null;
+    private setting: FlipSetting;
     private readonly block: HTMLElement; // Root HTML Element
 
-    private pages: PageCollection = null;
-    private flipController: Flip;
-    private render: Render;
+    private pages!: PageCollection;
+    private flipController!: Flip;
+    private render!: Render;
 
-    private ui: UI;
+    private ui!: UI;
 
     /** Track which pages have already been requested for rendering */
     private requestedPages: Set<number> = new Set();
@@ -372,7 +372,7 @@ export class PageFlip extends EventObject {
      * @returns {Orientation} Сurrent orientation: portrait or landscape
      */
     public getOrientation(): Orientation {
-        return this.render.getOrientation();
+        return this.render.getOrientation()!;
     }
 
     /**
