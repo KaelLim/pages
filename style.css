@@ -201,15 +201,17 @@ body {
 #toolbar {
   flex: 0 0 auto;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: center;
   align-items: center;
-  gap: 6px 10px;
-  padding: 6px 12px;
+  gap: 2px 6px;
+  padding: 2px 8px;
   opacity: 0;
   transition: opacity 0.3s;
   position: relative;
   z-index: 10;
+  min-height: 0;
+  overflow-x: auto;
 }
 
 #toolbar.visible {
@@ -222,10 +224,20 @@ body {
   color: #e0e0e0;
   font-size: 1rem;
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 8px;
+  padding: 0 4px;
+  border-radius: 4px;
   transition: background 0.2s;
   flex-shrink: 0;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+}
+
+#toolbar button .material-symbols-rounded {
+  font-size: 18px;
+  line-height: 1;
+  vertical-align: middle;
 }
 
 #toolbar button:hover {
@@ -582,8 +594,9 @@ body {
 
 @media (max-width: 600px) {
   #toolbar {
-    gap: 2px 6px;
-    padding: 4px 8px;
+    gap: 2px 4px;
+    padding: 2px 6px;
+    flex-wrap: wrap;
   }
 
   #page-slider {
@@ -593,7 +606,7 @@ body {
   }
 
   #toolbar button {
-    padding: 4px 6px;
+    padding: 0 4px;
     font-size: 0.9rem;
   }
 

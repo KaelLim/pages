@@ -47,17 +47,18 @@ export class ImagePage extends Page {
 
         ctx.clip();
 
+        // Clear the clip region to prevent stale pixels (static leftPage/rightPage
+        // drawn earlier) from bleeding through when this page has transparent
+        // areas — blank pages, PDFs with transparent regions, or sub-pixel gaps.
+        const bg = this.render.getSettings().canvasBgColor;
+        if (bg === 'transparent') {
+            ctx.clearRect(0, 0, pageWidth, pageHeight);
+        } else {
+            ctx.fillStyle = bg;
+            ctx.fillRect(0, 0, pageWidth, pageHeight);
+        }
+
         if (!this.isLoad) {
-            // Only fill background for unloaded/blank pages to mask static pages.
-            // Loaded images fully cover the clip area — filling first would
-            // erase static page pixels and cause subpixel gaps at fold lines.
-            const bg = this.render.getSettings().canvasBgColor;
-            if (bg === 'transparent') {
-                ctx.clearRect(0, 0, pageWidth, pageHeight);
-            } else {
-                ctx.fillStyle = bg;
-                ctx.fillRect(0, 0, pageWidth, pageHeight);
-            }
             this.drawLoader(ctx, { x: 0, y: 0 }, pageWidth, pageHeight);
         } else {
             ctx.drawImage(this.image, 0, 0, pageWidth, pageHeight);
@@ -96,6 +97,11 @@ export class ImagePage extends Page {
 
         ctx.rotate(this.state.angle);
         ctx.clip();
+
+        // NOTE: don't clearRect here — curl mesh strips may have sub-pixel gaps,
+        // and clearing would expose them as visible transparent slits.
+        // The static leftPage/rightPage underneath naturally mask those gaps.
+        // Blank pages are always bottom (non-curl), handled by draw()'s clear.
 
         const imgW = this.image.naturalWidth;
         const imgH = this.image.naturalHeight;

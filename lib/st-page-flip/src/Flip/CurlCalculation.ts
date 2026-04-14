@@ -103,36 +103,44 @@ export class CurlCalculation {
         const strips: CurlStrip[] = [];
         const stripWidth = pageWidth / stripCount;
         const curlFactor = intensity * CurlCalculation.progressToIntensity(progress);
+        const maxAngle = (Math.PI / 6) * curlFactor;
+
+        // Accumulate cursor position along the curled curve so each strip's
+        // left edge meets the previous strip's (rotated) right edge — no seams.
+        // For FORWARD (fold on left), we walk RIGHT→LEFT and store negative
+        // offsets, then normalize below so strip positions remain in [0, pageWidth].
+        let cursorX = 0;
+        let cursorY = 0;
 
         for (let i = 0; i < stripCount; i++) {
             const t = i / stripCount;
 
             // curlT: 0 at spine side, 1 at fold edge
-            // FORWARD (right→left): fold edge is at low i (left), spine at high i (right)
-            // BACK (left→right):    fold edge is at high i (right), spine at low i (left)
             const curlT = isForward
-                ? Math.pow(1 - t, 2)   // invert: strip 0 = max curl
-                : Math.pow(t, 2);      // normal: strip N = max curl
+                ? Math.pow(1 - t, 2)
+                : Math.pow(t, 2);
 
-            // Max rotation ~30 degrees at max curl
-            const maxAngle = (Math.PI / 6) * curlFactor;
             const angle = curlT * maxAngle;
 
-            // Page lifts off surface as it curls
-            const maxLift = pageHeight * 0.02 * curlFactor;
-            const yOffset = -curlT * maxLift;
-
-            // Lighting: facing up = highlight, facing away = shadow
-            const light = 1.0 + (curlT * 0.15 * curlFactor) - (Math.pow(curlT, 3) * 0.45 * curlFactor);
+            // Lighting: facing up = highlight, facing away = shadow (on crease)
+            const light = 1.0
+                + (curlT * 0.15 * curlFactor)
+                - (Math.pow(curlT, 3) * 0.45 * curlFactor);
 
             strips.push({
                 t,
-                x: i * stripWidth,
-                width: stripWidth + 0.5, // +0.5 prevents sub-pixel gaps
+                x: cursorX,
+                width: stripWidth + 0.5, // +0.5 overlap prevents sub-pixel gaps
                 angle,
-                yOffset,
+                yOffset: cursorY,
                 light,
             });
+
+            // Advance cursor by the rotated step so the next strip's left edge
+            // meets this strip's right edge. Use pure stripWidth (no overlap
+            // here — overlap is for drawing, not positioning).
+            cursorX += stripWidth * Math.cos(angle);
+            cursorY -= stripWidth * Math.sin(angle);
         }
 
         return strips;
