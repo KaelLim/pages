@@ -1,5 +1,6 @@
 import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.6.205/build/pdf.min.mjs';
 import { extractToc, flattenToc, computeSiblingIndex, type TocItem } from './toc.js';
+import { getCachedPage, setCachedPage, buildCacheKey, evictStaleCache } from './cache.js';
 
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -8,6 +9,18 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
 // PDF render scale: must be >= canvas buffer DPR (2x) to avoid upscaling blur.
 // 3x ensures source image covers 2x canvas buffer at typical page widths.
 const RENDER_SCALE = 3;
+
+// Feature-detect WebP support once at startup.
+// WebP saves ~30-50% bandwidth/memory vs PNG with same visual quality.
+const SUPPORTS_WEBP: boolean = (() => {
+  try {
+    const c = document.createElement('canvas');
+    c.width = c.height = 1;
+    return c.toDataURL('image/webp').startsWith('data:image/webp');
+  } catch {
+    return false;
+  }
+})();
 const DEFAULT_PDF = './sample.pdf';
 const CORS_PROXY = 'https://corsproxy.io/?url=';
 
@@ -19,6 +32,7 @@ interface ViewerAnalyticsConfig {
   trackNavigation?: boolean;
   trackShare?: boolean;
   trackFullscreen?: boolean;
+  trackReadingTime?: boolean;
 }
 
 interface ViewerConfig {
@@ -84,10 +98,35 @@ async function renderPageToImage(pdf: PDFDocumentProxy, pageNum: number): Promis
   await page.render({ canvasContext: ctx, viewport }).promise;
 
   return {
-    dataUrl: canvas.toDataURL(),
+    // Use WebP at 92% quality when supported — visually identical, ~30-50% smaller.
+    dataUrl: SUPPORTS_WEBP
+      ? canvas.toDataURL('image/webp', 0.92)
+      : canvas.toDataURL('image/png'),
     width: viewport.width,
     height: viewport.height,
   };
+}
+
+/**
+ * Render a page with IndexedDB cache lookup.
+ * Falls through to renderPageToImage on miss and stores result.
+ */
+async function renderPageCached(
+  pdf: PDFDocumentProxy,
+  pageNum: number,
+  pdfUrl: string
+): Promise<PageRenderResult> {
+  const key = buildCacheKey(pdfUrl, pageNum, RENDER_SCALE);
+  const cached = await getCachedPage(key);
+  if (cached) {
+    // Derive dimensions from the PDF page without full render
+    const page = await pdf.getPage(pageNum);
+    const vp = page.getViewport({ scale: RENDER_SCALE });
+    return { dataUrl: cached, width: vp.width, height: vp.height };
+  }
+  const result = await renderPageToImage(pdf, pageNum);
+  void setCachedPage(key, result.dataUrl);
+  return result;
 }
 
 // Prompt user for PDF password (ISO 32000 encryption support)
@@ -124,65 +163,86 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
   const loadingEl = document.getElementById('loading')!;
   let bookEl = document.getElementById('book')!;
 
-  try {
-    // 1. Load PDF document (streaming — only downloads metadata + needed pages)
-    loadingEl.textContent = 'Loading PDF...';
-    let pdfSource: string | PDFDocumentSource = pdfUrl;
-    const isExternal = pdfUrl.startsWith('http');
-    if (isExternal) {
-      try {
-        const res = await fetch(pdfUrl);
-        pdfSource = { data: await res.arrayBuffer() };
-      } catch {
-        // CORS fallback: ask user consent before sending URL to third-party proxy
-        const proxyHost = new URL(CORS_PROXY).hostname;
-        const consent = confirm(
-          `Cannot load PDF directly (blocked by CORS).\n\n` +
-          `Retry through a third-party proxy (${proxyHost})?\n` +
-          `The PDF URL will be sent to this service.`
-        );
-        if (!consent) throw new Error('PDF loading cancelled by user');
+  // Background cache housekeeping (non-blocking)
+  void evictStaleCache();
 
-        loadingEl.textContent = 'Loading via CORS proxy...';
-        const proxyUrl = `${CORS_PROXY}${encodeURIComponent(pdfUrl)}`;
-        const res = await fetch(proxyUrl);
-        if (!res.ok) throw new Error('Failed to load PDF via proxy');
-        pdfSource = { data: await res.arrayBuffer() };
-      }
-    }
-    let pdf: PDFDocumentProxy;
-    try {
-      const docParams = typeof pdfSource === 'string'
-        ? { url: pdfSource } : pdfSource;
-      pdf = await pdfjsLib.getDocument({
-        ...docParams,
-        cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.6.205/cmaps/',
-        cMapPacked: true,
-      }).promise;
-    } catch (err: unknown) {
-      if (err instanceof Error && err.name === 'PasswordException') {
-        // Encrypted PDF — prompt for password (ISO 32000 encryption)
-        loadingEl.classList.add('hidden');
-        while (true) {
-          const password = await promptPdfPassword();
-          try {
-            const src = typeof pdfSource === 'string' ? { url: pdfSource } : pdfSource;
-            pdf = await pdfjsLib.getDocument({ ...src, password }).promise;
+  try {
+    // 1. Load PDF. PDF.js streams via HTTP range requests (only downloads
+    //    what each page needs). CORS-blocked URLs fall back to proxy fetch.
+    loadingEl.textContent = 'Loading PDF...';
+
+    const commonParams = {
+      cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.6.205/cmaps/',
+      cMapPacked: true,
+      rangeChunkSize: 65536,
+      disableStream: false,
+      disableAutoFetch: false,
+      disableRange: false,
+    };
+
+    // Load PDF with password prompt loop on PasswordException.
+    // `loader` is called each time (allows retrying with a password).
+    async function loadPdfWithPassword(
+      loader: (password?: string) => PDFDocumentSource
+    ): Promise<PDFDocumentProxy> {
+      let password: string | undefined;
+      let shownPasswordUi = false;
+      while (true) {
+        try {
+          const result = await pdfjsLib.getDocument(loader(password)).promise;
+          if (shownPasswordUi) {
             trackEvent('pdf_password_entered', { success: true });
-            break;
-          } catch (retryErr: unknown) {
-            if (retryErr instanceof Error && retryErr.name === 'PasswordException') {
+            loadingEl.classList.remove('hidden');
+          }
+          return result;
+        } catch (err: unknown) {
+          if (err instanceof Error && err.name === 'PasswordException') {
+            if (!shownPasswordUi) {
+              loadingEl.classList.add('hidden');
+              shownPasswordUi = true;
+            } else {
               document.getElementById('password-error')!.classList.remove('hidden');
               trackEvent('pdf_password_entered', { success: false });
-              continue;
             }
-            throw retryErr;
+            password = await promptPdfPassword();
+          } else {
+            if (shownPasswordUi) loadingEl.classList.remove('hidden');
+            throw err;
           }
         }
-        loadingEl.classList.remove('hidden');
-      } else {
-        throw err;
       }
+    }
+
+    let pdf: PDFDocumentProxy;
+    try {
+      // Try streaming load with range requests
+      pdf = await loadPdfWithPassword((password) => ({
+        url: pdfUrl,
+        password,
+        ...commonParams,
+      }));
+    } catch (directErr) {
+      if (!pdfUrl.startsWith('http')) throw directErr;
+
+      // CORS fallback: full download via third-party proxy (range requests lost)
+      const proxyHost = new URL(CORS_PROXY).hostname;
+      const consent = confirm(
+        `Cannot load PDF directly (blocked by CORS).\n\n` +
+        `Retry through a third-party proxy (${proxyHost})?\n` +
+        `The PDF URL will be sent to this service.`
+      );
+      if (!consent) throw new Error('PDF loading cancelled by user');
+
+      loadingEl.textContent = 'Loading via CORS proxy...';
+      const proxyUrl = `${CORS_PROXY}${encodeURIComponent(pdfUrl)}`;
+      const res = await fetch(proxyUrl);
+      if (!res.ok) throw new Error('Failed to load PDF via proxy');
+      const data = await res.arrayBuffer();
+      pdf = await loadPdfWithPassword((password) => ({
+        data,
+        password,
+        ...commonParams,
+      }));
     }
     const numPages = pdf.numPages;
 
@@ -201,7 +261,7 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
 
     // 2. Render only the first page to get dimensions
     loadingEl.textContent = 'Rendering...';
-    const firstPage = await renderPageToImage(pdf, 1);
+    const firstPage = await renderPageCached(pdf, 1, pdfUrl);
     const pageWidth = Math.round(firstPage.width);
     const pageHeight = Math.round(firstPage.height);
 
@@ -213,6 +273,30 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
     let pageFlip: St.PageFlip | null = null;
     let currentPageMap: number[] = [];
     let lastSoundTime = 0;
+
+    // Reading time tracking: accumulate dwell time per page
+    let currentPageEnterTime = Date.now();
+    let currentPageForTiming = 0;
+
+    function flushReadingTime(): void {
+      if (!viewerConfig.analytics?.trackReadingTime) return;
+      if (!currentPageForTiming) return;
+      const dwellMs = Date.now() - currentPageEnterTime;
+      // Only send if dwell > 1 second (ignore rapid flipping)
+      if (dwellMs >= 1000) {
+        trackEvent('page_view_time', {
+          page: currentPageForTiming,
+          dwell_ms: dwellMs,
+          dwell_sec: Math.round(dwellMs / 1000),
+        });
+      }
+    }
+
+    // Flush on page hide (user switches tab / closes)
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) flushReadingTime();
+    });
+    window.addEventListener('pagehide', flushReadingTime);
 
     // Accessible text layer (ISO 32000 text extraction + WCAG screen reader support)
     const textLayerEl = document.getElementById('pdf-text-layer')!;
@@ -316,7 +400,7 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
             pageFlip!.updatePageImage(idx, renderedPages.get(originalPage)!);
             continue;
           }
-          const pageData = await renderPageToImage(pdf, originalPage);
+          const pageData = await renderPageCached(pdf, originalPage, pdfUrl);
           renderedPages.set(originalPage, pageData.dataUrl);
           pageFlip!.updatePageImage(idx, pageData.dataUrl);
         }
@@ -340,11 +424,24 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
         updatePageInfo();
         updateTextLayer();
 
+        // Persist last reading position per PDF URL
+        try { localStorage.setItem(lastPageKey, String(getOriginalPage())); }
+        catch { /* storage quota / private mode — non-fatal */ }
+
+        // Reading time: flush previous page dwell, start timer for new page
+        flushReadingTime();
+        currentPageForTiming = getOriginalPage();
+        currentPageEnterTime = Date.now();
+
         // GA4: page flip
         if (viewerConfig.analytics?.trackPageFlip) {
           trackEvent('page_flip', { page: getOriginalPage(), total: numPages });
         }
       });
+
+      // Initialize timer for starting page
+      currentPageForTiming = getOriginalPage();
+      currentPageEnterTime = Date.now();
     }
 
     let resizeTimer: ReturnType<typeof setTimeout>;
@@ -362,8 +459,13 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
       }, 200);
     });
 
-    // 4. Build initial book (LTR)
-    buildBook(false);
+    // 4. Build initial book (LTR), optionally restoring last read page
+    const lastPageKey = `pdfviewer:lastpage:${pdfUrl}`;
+    const savedPage = Number(localStorage.getItem(lastPageKey));
+    const initialPage = Number.isFinite(savedPage) && savedPage > 0 && savedPage <= numPages
+      ? savedPage
+      : undefined;
+    buildBook(false, initialPage);
     updateTextLayer();
 
     // 5. Hide loading indicator
@@ -644,7 +746,7 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
         if (cached) {
           img.src = cached;
         } else {
-          renderPageToImage(pdf, pageNum).then(data => {
+          renderPageCached(pdf, pageNum, pdfUrl).then(data => {
             renderedPages.set(pageNum, data.dataUrl);
             img.src = data.dataUrl;
           });
