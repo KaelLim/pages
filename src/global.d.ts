@@ -39,6 +39,15 @@ interface PDFPageProxy {
   getViewport(params: { scale: number }): { width: number; height: number };
   render(params: { canvasContext: CanvasRenderingContext2D; viewport: { width: number; height: number } }): { promise: Promise<void> };
   getTextContent(): Promise<{ items: Array<{ str: string }> }>;
+  getAnnotations(): Promise<PDFAnnotation[]>;
+}
+
+interface PDFAnnotation {
+  subtype: string;
+  rect: [number, number, number, number];
+  url?: string;
+  unsafeUrl?: string;
+  dest?: string | unknown[] | null;
 }
 
 /** StPageFlip loaded as UMD global via <script> tag */

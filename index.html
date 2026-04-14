@@ -26,6 +26,7 @@
     <button id="btn-zoom-close" class="zoom-close hidden" title="Exit zoom" aria-label="Exit zoom">
       <span class="material-symbols-rounded" aria-hidden="true">fit_screen</span>
     </button>
+    <div id="page-links" aria-hidden="true"></div>
   </main>
 
   <nav id="toolbar" role="toolbar" aria-label="Viewer controls">
@@ -42,6 +43,9 @@
     <div id="toolbar-divider"></div>
     <button id="btn-toc" class="hidden" title="Table of contents" aria-label="Show table of contents">
       <span class="material-symbols-rounded" aria-hidden="true">list</span>
+    </button>
+    <button id="btn-search" title="Search" aria-label="Search text in document">
+      <span class="material-symbols-rounded" aria-hidden="true">search</span>
     </button>
     <button id="btn-thumbnail" title="Thumbnails" aria-label="Show page thumbnails">
       <span class="material-symbols-rounded" aria-hidden="true">grid_view</span>
@@ -80,6 +84,21 @@
       </button>
     </div>
     <div id="toc-list" role="tree" aria-label="Chapter list"></div>
+  </div>
+
+  <!-- Search overlay -->
+  <div id="search-overlay" class="hidden" role="dialog" aria-labelledby="search-header-title" aria-modal="true">
+    <div id="search-header">
+      <span id="search-header-title">Search</span>
+      <button id="btn-search-close" aria-label="Close search">
+        <span class="material-symbols-rounded" aria-hidden="true">close</span>
+      </button>
+    </div>
+    <div id="search-controls">
+      <input id="search-input" type="search" placeholder="Type to search…" aria-label="Search query" autocomplete="off">
+      <span id="search-status" role="status" aria-live="polite"></span>
+    </div>
+    <div id="search-results" role="listbox" aria-label="Search results"></div>
   </div>
 
   <!-- Password prompt for encrypted PDFs (ISO 32000) -->

@@ -1,6 +1,8 @@
 import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.6.205/build/pdf.min.mjs';
 import { extractToc, flattenToc, computeSiblingIndex, type TocItem } from './toc.js';
 import { getCachedPage, setCachedPage, buildCacheKey, evictStaleCache } from './cache.js';
+import { buildIndex as buildSearchIndex, search as runSearch, type PageIndex, type SearchMatch } from './search.js';
+import { extractLinks, resolveDestPage, type LinkInfo } from './links.js';
 
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -440,6 +442,9 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
         if (viewerConfig.analytics?.trackPageFlip) {
           trackEvent('page_flip', { page: getOriginalPage(), total: numPages });
         }
+
+        // Broadcast so TOC / link overlays survive buildBook rebuilds.
+        document.dispatchEvent(new CustomEvent('viewer:flip'));
       });
 
       // Initialize timer for starting page
@@ -807,6 +812,265 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
       setupToc(tocTree);
     }
 
+    // ── Full-text search ──
+    setupSearch();
+
+    // ── Page hyperlinks ──
+    setupLinks();
+
+    function setupLinks(): void {
+      const overlay = document.getElementById('page-links')!;
+      const linkCache = new Map<number, LinkInfo[]>();
+      const bookArea = document.getElementById('book-area')!;
+
+      async function getLinks(page: number): Promise<LinkInfo[]> {
+        const cached = linkCache.get(page);
+        if (cached) return cached;
+        try {
+          const links = await extractLinks(pdf, page);
+          linkCache.set(page, links);
+          return links;
+        } catch {
+          linkCache.set(page, []);
+          return [];
+        }
+      }
+
+      async function handleLink(link: LinkInfo): Promise<void> {
+        if (link.url) {
+          const host = (() => { try { return new URL(link.url).host; } catch { return link.url; } })();
+          const ok = confirm(`Open external link?\n\n${host}\n\n${link.url}`);
+          if (ok) window.open(link.url, '_blank', 'noopener,noreferrer');
+          if (viewerConfig.analytics?.trackNavigation) {
+            trackEvent('link_click', { type: 'external', host });
+          }
+        } else if (link.dest !== undefined) {
+          const target = await resolveDestPage(pdf, link.dest);
+          if (target !== null) {
+            const realIdx = currentPageMap.indexOf(target);
+            if (realIdx >= 0) {
+              pageFlip!.turnToPage(realIdx);
+              updatePageInfo();
+            }
+            if (viewerConfig.analytics?.trackNavigation) {
+              trackEvent('link_click', { type: 'internal', page: target });
+            }
+          }
+        }
+      }
+
+      async function render(): Promise<void> {
+        if (!pageFlip) return;
+        overlay.innerHTML = '';
+
+        // Hide while zoomed (rects don't align with panning)
+        if (zoomLevel !== 1) {
+          overlay.classList.add('hidden');
+          return;
+        }
+        overlay.classList.remove('hidden');
+
+        const idx = pageFlip.getCurrentPageIndex();
+        const isPortrait = pageFlip.getOrientation() === 'portrait';
+        const visible: { page: number; slot: 'left' | 'right' | 'full' }[] = [];
+        const p1 = currentPageMap[idx];
+        if (!p1) return;
+
+        if (isPortrait) {
+          visible.push({ page: p1, slot: 'full' });
+        } else {
+          const p2 = currentPageMap[idx + 1];
+          // On a spread: even-index page on left, odd-index on right.
+          // Blank pages have page === 0 (or undefined); skip them.
+          if (p1 > 0) visible.push({ page: p1, slot: 'left' });
+          if (p2 && p2 > 0) visible.push({ page: p2, slot: 'right' });
+        }
+
+        const bookEl = document.getElementById('book');
+        if (!bookEl) return;
+        const bookRect = bookEl.getBoundingClientRect();
+        const areaRect = bookArea.getBoundingClientRect();
+        const offsetX = bookRect.left - areaRect.left;
+        const offsetY = bookRect.top - areaRect.top;
+        const pageW = isPortrait ? bookRect.width : bookRect.width / 2;
+        const pageH = bookRect.height;
+
+        for (const { page, slot } of visible) {
+          const links = await getLinks(page);
+          const baseX = offsetX + (slot === 'right' ? pageW : 0);
+          const baseY = offsetY;
+          for (const link of links) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'page-link';
+            btn.style.left = `${baseX + link.xRatio * pageW}px`;
+            btn.style.top = `${baseY + link.yRatio * pageH}px`;
+            btn.style.width = `${link.wRatio * pageW}px`;
+            btn.style.height = `${link.hRatio * pageH}px`;
+            btn.setAttribute(
+              'aria-label',
+              link.url ? `External link: ${link.url}` : `Internal link on page ${page}`
+            );
+            btn.title = link.url ?? `Page ${page} link`;
+            btn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              void handleLink(link);
+            });
+            btn.addEventListener('mousedown', (e) => e.stopPropagation());
+            btn.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+            overlay.appendChild(btn);
+          }
+        }
+      }
+
+      // Initial + re-render on flip/resize (survives buildBook rebuild)
+      document.addEventListener('viewer:flip', () => { void render(); });
+      window.addEventListener('resize', () => {
+        // debounce aligned with the existing resize rebuild
+        setTimeout(() => { void render(); }, 250);
+      });
+
+      // First render (after tiny delay to let StPageFlip layout settle)
+      setTimeout(() => { void render(); }, 100);
+
+      // Re-render when zoom changes (applyZoom hook via MutationObserver on #book style)
+      const bookWatch = document.getElementById('book');
+      if (bookWatch) {
+        new MutationObserver(() => { void render(); })
+          .observe(bookWatch, { attributes: true, attributeFilter: ['style'] });
+      }
+    }
+
+    function setupSearch(): void {
+      const btnSearch = document.getElementById('btn-search')! as HTMLButtonElement;
+      const overlay = document.getElementById('search-overlay')!;
+      const input = document.getElementById('search-input')! as HTMLInputElement;
+      const status = document.getElementById('search-status')!;
+      const resultsEl = document.getElementById('search-results')!;
+      const btnClose = document.getElementById('btn-search-close')!;
+
+      let index: PageIndex[] | null = null;
+      let indexing = false;
+      let debounceTimer: number | null = null;
+      let lastQuery = '';
+
+      async function ensureIndex(): Promise<PageIndex[]> {
+        if (index) return index;
+        if (indexing) {
+          // Wait until indexing in another invocation finishes
+          while (indexing) await new Promise(r => setTimeout(r, 50));
+          return index!;
+        }
+        indexing = true;
+        status.textContent = 'Indexing…';
+        try {
+          index = await buildSearchIndex(pdf, textCache, (done, total) => {
+            status.textContent = `Indexing ${done}/${total}`;
+          });
+          return index;
+        } finally {
+          indexing = false;
+        }
+      }
+
+      function escapeHtml(s: string): string {
+        return s.replace(/[&<>"']/g, c => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]!));
+      }
+
+      function highlight(snippet: string, query: string): string {
+        const safe = escapeHtml(snippet);
+        if (!query) return safe;
+        const re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+        return safe.replace(re, m => `<mark>${m}</mark>`);
+      }
+
+      function render(matches: SearchMatch[], query: string): void {
+        resultsEl.innerHTML = '';
+        if (!query) {
+          status.textContent = '';
+          return;
+        }
+        status.textContent = matches.length === 0
+          ? 'No matches'
+          : `${matches.length} match${matches.length === 1 ? '' : 'es'}`;
+
+        for (const m of matches) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'search-item';
+          btn.setAttribute('role', 'option');
+          btn.innerHTML = `<span class="search-page">p.${m.page}</span>${highlight(m.snippet, query)}`;
+          btn.addEventListener('click', () => jumpToMatch(m));
+          resultsEl.appendChild(btn);
+        }
+      }
+
+      function jumpToMatch(m: SearchMatch): void {
+        const realIdx = currentPageMap.indexOf(m.page);
+        if (realIdx >= 0) {
+          pageFlip!.turnToPage(realIdx);
+          updatePageInfo();
+        }
+        overlay.classList.add('hidden');
+        btnSearch.focus();
+        if (viewerConfig.analytics?.trackNavigation) {
+          trackEvent('search_jump', { page: m.page, query: lastQuery });
+        }
+      }
+
+      async function runQuery(query: string): Promise<void> {
+        lastQuery = query;
+        if (!query.trim()) {
+          render([], '');
+          return;
+        }
+        const idx = await ensureIndex();
+        if (input.value !== query) return; // stale
+        const matches = runSearch(idx, query, 5);
+        render(matches, query);
+      }
+
+      input.addEventListener('input', () => {
+        const q = input.value;
+        if (debounceTimer !== null) window.clearTimeout(debounceTimer);
+        debounceTimer = window.setTimeout(() => { void runQuery(q); }, 200);
+      });
+
+      function openSearch(): void {
+        overlay.classList.remove('hidden');
+        input.focus();
+        input.select();
+        if (viewerConfig.analytics?.trackNavigation) {
+          trackEvent('search_open');
+        }
+      }
+
+      function closeSearch(): void {
+        overlay.classList.add('hidden');
+        btnSearch.focus();
+      }
+
+      btnSearch.addEventListener('click', openSearch);
+      btnClose.addEventListener('click', closeSearch);
+
+      overlay.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          closeSearch();
+        }
+      });
+
+      // Ctrl/Cmd+F opens search
+      document.addEventListener('keydown', (e: KeyboardEvent) => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+          e.preventDefault();
+          openSearch();
+        }
+      });
+    }
+
     function setupToc(tree: TocItem[]): void {
       const btnToc = document.getElementById('btn-toc')!;
       const tocOverlay = document.getElementById('toc-overlay')!;
@@ -915,8 +1179,8 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
         }
       });
 
-      // Update current chapter highlight on every flip
-      pageFlip?.on('flip', updateCurrent);
+      // Update current chapter highlight on every flip (survives buildBook rebuild)
+      document.addEventListener('viewer:flip', updateCurrent);
     }
 
     // Share
@@ -943,6 +1207,10 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
       const tocOverlay = document.getElementById('toc-overlay');
       if (tocOverlay && !tocOverlay.classList.contains('hidden')) {
         // TOC overlay handles its own keydown (arrows, Escape). Skip page nav here.
+        return;
+      }
+      const searchOverlay = document.getElementById('search-overlay');
+      if (searchOverlay && !searchOverlay.classList.contains('hidden')) {
         return;
       }
       if (!thumbOverlay.classList.contains('hidden')) {
