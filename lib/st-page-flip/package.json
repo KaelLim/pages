@@ -1,49 +1,32 @@
 {
-  "name": "page-flip",
-  "version": "2.0.7",
+  "name": "flipbook",
+  "version": "3.0.0",
+  "type": "module",
   "main": "dist/js/page-flip.browser.js",
   "browser": "dist/js/page-flip.browser.js",
-  "author": "oleg.litovski9@gmail.com",
+  "module": "dist/js/page-flip.module.js",
+  "types": "dist/types/PageFlip.d.ts",
+  "author": "KaelLim",
   "license": "MIT",
-  "description": "Powerful, simple and flexible JS Library for creating realistic and beautiful page turning effect",
+  "description": "High-performance flipbook engine with single-page toggle, RTL, lazy loading, and edge rendering",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Nodlik/StPageFlip.git"
+    "url": "https://github.com/KaelLim/flipbook.git"
   },
-  "publishConfig": {},
-  "homepage": "https://nodlik.github.io/StPageFlip/",
-  "dependencies": {},
+  "homepage": "https://github.com/KaelLim/flipbook",
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "^2.33.0",
-    "@typescript-eslint/parser": "^2.33.0",
-    "css-loader": "^3.5.3",
-    "eslint": "^7.0.0",
-    "eslint-plugin-typescript": "^0.14.0",
-    "prettier": "^2.0.5",
-    "rollup-plugin-postcss": "^3.1.1",
-    "rollup-plugin-terser": "^6.1.0",
-    "rollup-plugin-typescript2": "^0.27.1",
-    "style-loader": "^1.2.1",
-    "ts-loader": "^7.0.4",
-    "typedoc": "^0.17.8",
-    "typescript": "latest",
-    "webpack": "^4.43.0",
-    "webpack-cli": "^3.3.11"
+    "@rollup/plugin-terser": "^1.0.0",
+    "@rollup/plugin-typescript": "^12.3.0",
+    "rollup": "^4.60.0",
+    "rollup-plugin-postcss": "^4.0.2",
+    "tslib": "^2.8.0",
+    "typescript": "^6.0.2"
   },
   "scripts": {
-    "eslint": "eslint . --ext .ts",
-    "build-global": "npx webpack",
     "build": "rollup -c"
   },
   "keywords": [
-    "typescript",
-    "page",
-    "flip",
-    "canvas",
-    "book",
-    "reader",
-    "fold",
-    "frontend",
-    "javascript"
+    "typescript", "page", "flip", "canvas",
+    "book", "reader", "fold", "frontend", "javascript"
   ]
 }

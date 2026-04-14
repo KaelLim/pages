@@ -3,74 +3,126 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https: data:;">
   <title>PDF Page Flip Demo</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="book-area">
-    <div id="book"></div>
-    <button id="btn-prev" class="nav-arrow nav-left" title="Previous page">
-      <span class="material-symbols-rounded">chevron_left</span>
+  <main id="book-area" aria-label="Document viewer">
+    <div id="book" role="document" aria-label="PDF document, use arrow keys to navigate pages"></div>
+    <button id="btn-prev" class="nav-arrow nav-left" title="Previous page" aria-label="Previous page">
+      <span class="material-symbols-rounded" aria-hidden="true">chevron_left</span>
     </button>
-    <button id="btn-next" class="nav-arrow nav-right" title="Next page">
-      <span class="material-symbols-rounded">chevron_right</span>
+    <button id="btn-next" class="nav-arrow nav-right" title="Next page" aria-label="Next page">
+      <span class="material-symbols-rounded" aria-hidden="true">chevron_right</span>
     </button>
-    <button id="btn-first" class="nav-edge nav-edge-left" title="First page">
-      <span class="material-symbols-rounded">first_page</span>
+    <button id="btn-first" class="nav-edge nav-edge-left" title="First page" aria-label="First page">
+      <span class="material-symbols-rounded" aria-hidden="true">first_page</span>
     </button>
-    <button id="btn-last" class="nav-edge nav-edge-right" title="Last page">
-      <span class="material-symbols-rounded">last_page</span>
+    <button id="btn-last" class="nav-edge nav-edge-right" title="Last page" aria-label="Last page">
+      <span class="material-symbols-rounded" aria-hidden="true">last_page</span>
     </button>
-    <button id="btn-zoom-close" class="zoom-close hidden" title="Exit zoom">
-      <span class="material-symbols-rounded">fit_screen</span>
+    <button id="btn-zoom-close" class="zoom-close hidden" title="Exit zoom" aria-label="Exit zoom">
+      <span class="material-symbols-rounded" aria-hidden="true">fit_screen</span>
     </button>
-  </div>
+  </main>
 
-  <div id="toolbar">
-    <input type="range" id="page-slider" min="1" max="1" value="1" title="Page timeline">
-    <span id="page-info">1 / 1</span>
+  <nav id="toolbar" role="toolbar" aria-label="Viewer controls">
+    <input type="range" id="page-slider" min="1" max="1" value="1" aria-label="Page navigation" aria-valuetext="Page 1 of 1">
+    <span id="page-info" role="status" aria-live="polite" aria-atomic="true">1 / 1</span>
     <div id="toolbar-divider"></div>
-    <button id="btn-zoom-out" title="Zoom out">
-      <span class="material-symbols-rounded">zoom_out</span>
+    <button id="btn-zoom-out" title="Zoom out" aria-label="Zoom out">
+      <span class="material-symbols-rounded" aria-hidden="true">zoom_out</span>
     </button>
-    <span id="zoom-info">100%</span>
-    <button id="btn-zoom-in" title="Zoom in">
-      <span class="material-symbols-rounded">zoom_in</span>
+    <span id="zoom-info" aria-live="polite">100%</span>
+    <button id="btn-zoom-in" title="Zoom in" aria-label="Zoom in">
+      <span class="material-symbols-rounded" aria-hidden="true">zoom_in</span>
     </button>
     <div id="toolbar-divider"></div>
-    <button id="btn-thumbnail" title="Thumbnails">
-      <span class="material-symbols-rounded">grid_view</span>
+    <button id="btn-thumbnail" title="Thumbnails" aria-label="Show page thumbnails">
+      <span class="material-symbols-rounded" aria-hidden="true">grid_view</span>
     </button>
-    <button id="btn-fullscreen" title="Fullscreen">
-      <span class="material-symbols-rounded">fullscreen</span>
+    <button id="btn-fullscreen" title="Fullscreen" aria-label="Toggle fullscreen">
+      <span class="material-symbols-rounded" aria-hidden="true">fullscreen</span>
     </button>
-    <button id="btn-sound" title="Toggle sound">
-      <span class="material-symbols-rounded">volume_up</span>
+    <button id="btn-sound" title="Toggle sound" aria-label="Toggle page flip sound">
+      <span class="material-symbols-rounded" aria-hidden="true">volume_up</span>
     </button>
-    <button id="btn-share" title="Share">
-      <span class="material-symbols-rounded">share</span>
+    <button id="btn-share" title="Share" aria-label="Share document link">
+      <span class="material-symbols-rounded" aria-hidden="true">share</span>
     </button>
-    <button id="btn-rtl" title="Toggle RTL">
-      <span class="material-symbols-rounded">format_textdirection_r_to_l</span>
+    <button id="btn-rtl" title="Toggle RTL" aria-label="Toggle right-to-left reading direction">
+      <span class="material-symbols-rounded" aria-hidden="true">format_textdirection_r_to_l</span>
     </button>
-  </div>
+  </nav>
 
   <!-- Thumbnail overlay -->
-  <div id="thumbnail-overlay" class="hidden">
+  <div id="thumbnail-overlay" class="hidden" role="dialog" aria-label="Page thumbnails" aria-modal="true">
     <div id="thumbnail-header">
       <span>Pages</span>
-      <button id="btn-thumb-close">
-        <span class="material-symbols-rounded">close</span>
+      <button id="btn-thumb-close" aria-label="Close thumbnails">
+        <span class="material-symbols-rounded" aria-hidden="true">close</span>
       </button>
     </div>
-    <div id="thumbnail-grid"></div>
+    <div id="thumbnail-grid" role="grid" aria-label="Page thumbnail grid"></div>
+  </div>
+
+  <!-- Password prompt for encrypted PDFs (ISO 32000) -->
+  <div id="password-overlay" class="hidden" role="dialog" aria-label="PDF password required" aria-modal="true">
+    <div id="password-dialog">
+      <p>This PDF is password-protected.</p>
+      <label for="pdf-password">Enter password:</label>
+      <input id="pdf-password" type="password" autocomplete="off">
+      <div id="password-error" class="hidden" role="alert">Incorrect password. Please try again.</div>
+      <div id="password-actions">
+        <button id="btn-password-ok">Open</button>
+        <button id="btn-password-cancel">Cancel</button>
+      </div>
+    </div>
   </div>
 
   <div id="loading">Loading PDF...</div>
 
+  <!-- Hidden accessible text layer for screen readers (ISO 32000 + WCAG) -->
+  <div id="pdf-text-layer" class="sr-only" aria-live="polite" aria-relevant="text"></div>
+
+  <!--
+    Viewer configuration (edit this JSON to customize behavior).
+    Analytics events are only sent if GA4/GTM is installed above.
+  -->
+  <script id="viewer-config" type="application/json">
+  {
+    "pdf": "./慈濟週報第131期.pdf",
+    "analytics": {
+      "trackPageFlip": true,
+      "trackZoom": true,
+      "trackNavigation": true,
+      "trackShare": true,
+      "trackFullscreen": true
+    }
+  }
+  </script>
+
+  <!--
+    Google Tag Manager (optional — paste your GTM snippet here).
+    Example with delayed loading for better page performance:
+
+    <script>
+    window.addEventListener('load', function() {
+      setTimeout(function() {
+        (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+        new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+        j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+        'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+        })(window,document,'script','dataLayer','GTM-XXXXXX');
+      }, 2000);
+    });
+    </script>
+  -->
+
   <!-- StPageFlip (UMD, exposes St.PageFlip globally) -->
-  <script src="lib/st-page-flip/dist/js/pageFlip.browser.js"></script>
+  <script src="lib/st-page-flip/dist/js/page-flip.browser.js"></script>
 
   <!-- App (ES module, imports PDF.js) -->
   <script type="module" src="app.js"></script>

@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://picsum.photos https://fastly.picsum.photos;">
+  <meta http-equiv="X-Frame-Options" content="SAMEORIGIN">
   <title>HTML Flipbook POC</title>
   <link rel="stylesheet" href="html-book.css">
 </head>
@@ -58,14 +60,14 @@
 
     <h2>Chapter 6: Interactive</h2>
     <p>HTML mode supports interactive content:</p>
-    <button class="demo-btn" onclick="this.textContent = 'Clicked! ✓'">Click Me</button>
+    <button class="demo-btn" data-interactive>Click Me</button>
     <div class="form-group">
-      <label>Text Input</label>
-      <input type="text" placeholder="Type something here...">
+      <label for="demo-text">Text Input</label>
+      <input id="demo-text" type="text" placeholder="Type something here...">
     </div>
     <div class="form-group">
-      <label>Select</label>
-      <select>
+      <label for="demo-select">Select</label>
+      <select id="demo-select">
         <option>Option A</option>
         <option>Option B</option>
         <option>Option C</option>
@@ -79,8 +81,8 @@
       <label class="radio-label"><input type="radio" name="demo" checked> Radio A</label>
       <label class="radio-label"><input type="radio" name="demo"> Radio B</label>
     </div>
-    <input type="range" class="demo-range" min="0" max="100" value="50">
-    <textarea placeholder="Textarea — type here..."></textarea>
+    <input type="range" class="demo-range" min="0" max="100" value="50" aria-label="Demo range slider">
+    <textarea placeholder="Textarea — type here..." aria-label="Demo textarea"></textarea>
 
     <h2>Chapter 7: More Content</h2>
     <p>Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae non recusandae.</p>
@@ -110,7 +112,7 @@
     <button id="btn-font-up" title="Increase font size">A+</button>
   </div>
 
-  <script src="lib/st-page-flip/dist/js/pageFlip.browser.js"></script>
+  <script src="lib/st-page-flip/dist/js/page-flip.browser.js"></script>
   <script src="html-book.js"></script>
 </body>
 </html>

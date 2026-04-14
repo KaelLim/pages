@@ -68,6 +68,21 @@ export interface FlipSetting {
 
     /** Number of pages to preload ahead/behind the current view. 0 = preload all at once */
     preloadRange: number;
+
+    /** Number of leading blank pages to exclude from edge progress calculation */
+    edgePageOffset: number;
+
+    /** Force single-page (portrait) display regardless of window width */
+    forceSinglePage: boolean;
+
+    /** Curl bend intensity (0 = flat flip, 1 = deep curl). Default 0.5 */
+    curlIntensity: number;
+
+    /** Number of vertical strips for mesh deformation. Default 20 */
+    meshStripCount: number;
+
+    /** Canvas background color. Used by clear() and blank page fill. */
+    canvasBgColor: string;
 }
 
 export class Settings {
@@ -97,6 +112,11 @@ export class Settings {
         showEdge: false,
         edgeWidth: 10,
         preloadRange: 3,
+        edgePageOffset: 0,
+        forceSinglePage: false,
+        curlIntensity: 0.5,
+        meshStripCount: 20,
+        canvasBgColor: '#fff',
     };
 
     /**
@@ -107,7 +127,13 @@ export class Settings {
      */
     public getSettings(userSetting: Record<string, number | string | boolean>): FlipSetting {
         const result = this._default;
-        Object.assign(result, userSetting);
+        // Whitelist merge: only copy known setting keys to prevent prototype pollution
+        const allowedKeys = new Set(Object.keys(this._default));
+        for (const key of Object.keys(userSetting)) {
+            if (allowedKeys.has(key)) {
+                (result as any)[key] = userSetting[key];
+            }
+        }
 
         if (result.size !== SizeType.STRETCH && result.size !== SizeType.FIXED)
             throw new Error('Invalid size type. Available only "fixed" and "stretch" value');

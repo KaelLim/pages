@@ -58,33 +58,33 @@ export abstract class Render {
     protected readonly app: PageFlip;
 
     /** Left static book page */
-    protected leftPage: Page = null;
+    protected leftPage: Page | null = null;
     /** Right static book page */
-    protected rightPage: Page = null;
+    protected rightPage: Page | null = null;
 
     /** Page currently flipping */
-    protected flippingPage: Page = null;
+    protected flippingPage: Page | null = null;
     /** Next page at the time of flipping */
-    protected bottomPage: Page = null;
+    protected bottomPage: Page | null = null;
 
     /** Current flipping direction */
-    protected direction: FlipDirection = null;
+    protected direction: FlipDirection | null = null;
     /** Current book orientation */
-    protected orientation: Orientation = null;
+    protected orientation: Orientation | null = null;
     /** Сurrent state of the shadows */
-    protected shadow: Shadow = null;
+    protected shadow: Shadow | null = null;
     /** Сurrent animation process */
-    protected animation: AnimationProcess = null;
+    protected animation: AnimationProcess | null = null;
     /** Page borders while flipping */
-    protected pageRect: RectPoints = null;
+    protected pageRect: RectPoints | null = null;
     /** Current book area */
-    private boundsRect: PageRect = null;
+    private boundsRect: PageRect | null = null;
 
     /** Timer started from start of rendering */
     protected timer = 0;
 
     /** RequestAnimationFrame ID for cancellation */
-    private rafId: number = null;
+    private rafId: number | null = null;
 
     /**
      * Safari browser definitions for resolving a bug with a css property clip-area
@@ -125,9 +125,9 @@ export abstract class Render {
             );
 
             if (frameIndex < this.animation.frames.length) {
-                this.animation.frames[frameIndex]();
+                this.animation.frames[frameIndex]?.();
             } else {
-                this.animation.onAnimateEnd();
+                this.animation.onAnimateEnd?.();
                 this.animation = null;
             }
         }
@@ -188,7 +188,7 @@ export abstract class Render {
      */
     public finishAnimation(): void {
         if (this.animation !== null) {
-            this.animation.frames[this.animation.frames.length - 1]();
+            this.animation.frames[this.animation.frames.length - 1]?.();
 
             if (this.animation.onAnimateEnd !== null) {
                 this.animation.onAnimateEnd();
@@ -217,10 +217,19 @@ export abstract class Render {
     private calculateBoundsRect(): Orientation {
         let orientation = Orientation.LANDSCAPE;
 
+        const forceSingle = this.app.getSettings().forceSinglePage;
+
         const blockWidth = this.getBlockWidth();
+        const blockHeight = this.getBlockHeight();
+
+        // If canvas was extended for curl room, use original height
+        // for book sizing but full height for centering.
+        const el = this.app.getUI().getDistElement();
+        const bookHeight = parseInt((el as HTMLElement).dataset?.bookHeight || '0', 10) || blockHeight;
+
         const middlePoint: Point = {
             x: blockWidth / 2,
-            y: this.getBlockHeight() / 2,
+            y: blockHeight / 2, // center in full canvas
         };
 
         const ratio = this.setting.width / this.setting.height;
@@ -231,7 +240,8 @@ export abstract class Render {
         let left = middlePoint.x - pageWidth;
 
         if (this.setting.size === SizeType.STRETCH) {
-            if (blockWidth < this.setting.minWidth * 2 && this.app.getSettings().usePortrait)
+            if (forceSingle ||
+                (blockWidth < this.setting.minWidth * 2 && this.app.getSettings().usePortrait))
                 orientation = Orientation.PORTRAIT;
 
             pageWidth =
@@ -242,8 +252,8 @@ export abstract class Render {
             if (pageWidth > this.setting.maxWidth) pageWidth = this.setting.maxWidth;
 
             pageHeight = pageWidth / ratio;
-            if (pageHeight > this.getBlockHeight()) {
-                pageHeight = this.getBlockHeight();
+            if (pageHeight > bookHeight) {
+                pageHeight = bookHeight; // constrain to original height, not extended
                 pageWidth = pageHeight * ratio;
             }
 
@@ -252,8 +262,8 @@ export abstract class Render {
                     ? middlePoint.x - pageWidth / 2 - pageWidth
                     : middlePoint.x - pageWidth;
         } else {
-            if (blockWidth < pageWidth * 2) {
-                if (this.app.getSettings().usePortrait) {
+            if (forceSingle || blockWidth < pageWidth * 2) {
+                if (forceSingle || this.app.getSettings().usePortrait) {
                     orientation = Orientation.PORTRAIT;
                     left = middlePoint.x - pageWidth / 2 - pageWidth;
                 }
@@ -261,11 +271,11 @@ export abstract class Render {
         }
 
         this.boundsRect = {
-            left,
-            top: middlePoint.y - pageHeight / 2,
-            width: pageWidth * 2,
-            height: pageHeight,
-            pageWidth: pageWidth,
+            left: Math.round(left),
+            top: Math.round(middlePoint.y - pageHeight / 2),
+            width: Math.round(pageWidth * 2),
+            height: Math.round(pageHeight),
+            pageWidth: Math.round(pageWidth),
         };
 
         return orientation;
@@ -327,7 +337,7 @@ export abstract class Render {
     /**
      * Get current flipping direction
      */
-    public getDirection(): FlipDirection {
+    public getDirection(): FlipDirection | null {
         return this.direction;
     }
 
@@ -337,7 +347,7 @@ export abstract class Render {
     public getRect(): PageRect {
         if (this.boundsRect === null) this.calculateBoundsRect();
 
-        return this.boundsRect;
+        return this.boundsRect!;
     }
 
     /**
@@ -350,7 +360,7 @@ export abstract class Render {
     /**
      * Get current book orientation
      */
-    public getOrientation(): Orientation {
+    public getOrientation(): Orientation | null {
         return this.orientation;
     }
 
@@ -377,7 +387,7 @@ export abstract class Render {
      *
      * @param page
      */
-    public setRightPage(page: Page): void {
+    public setRightPage(page: Page | null): void {
         if (page !== null) page.setOrientation(PageOrientation.RIGHT);
 
         this.rightPage = page;
@@ -387,7 +397,7 @@ export abstract class Render {
      * Set left static book page
      * @param page
      */
-    public setLeftPage(page: Page): void {
+    public setLeftPage(page: Page | null): void {
         if (page !== null) page.setOrientation(PageOrientation.LEFT);
 
         this.leftPage = page;
@@ -397,7 +407,7 @@ export abstract class Render {
      * Set next page at the time of flipping
      * @param page
      */
-    public setBottomPage(page: Page): void {
+    public setBottomPage(page: Page | null): void {
         if (page !== null)
             page.setOrientation(
                 this.direction === FlipDirection.BACK ? PageOrientation.LEFT : PageOrientation.RIGHT
@@ -411,7 +421,7 @@ export abstract class Render {
      *
      * @param page
      */
-    public setFlippingPage(page: Page): void {
+    public setFlippingPage(page: Page | null): void {
         if (page !== null)
             page.setOrientation(
                 this.direction === FlipDirection.FORWARD &&
@@ -450,7 +460,7 @@ export abstract class Render {
      *
      * @returns {Point} Coordinates relative to the work page
      */
-    public convertToPage(pos: Point, direction?: FlipDirection): Point {
+    public convertToPage(pos: Point, direction?: FlipDirection | null): Point {
         if (!direction) direction = this.direction;
 
         const rect = this.getRect();
@@ -473,7 +483,7 @@ export abstract class Render {
      *
      * @returns {Point} Global coordinates relative to the window
      */
-    public convertToGlobal(pos: Point, direction?: FlipDirection): Point {
+    public convertToGlobal(pos: Point | null, direction?: FlipDirection | null): Point | null {
         if (!direction) direction = this.direction;
 
         if (pos == null) return null;
@@ -499,14 +509,14 @@ export abstract class Render {
      *
      * @returns {RectPoints} Coordinates of the corners of the rectangle relative to the window
      */
-    public convertRectToGlobal(rect: RectPoints, direction?: FlipDirection): RectPoints {
+    public convertRectToGlobal(rect: RectPoints, direction?: FlipDirection | null): RectPoints {
         if (!direction) direction = this.direction;
 
         return {
-            topLeft: this.convertToGlobal(rect.topLeft, direction),
-            topRight: this.convertToGlobal(rect.topRight, direction),
-            bottomLeft: this.convertToGlobal(rect.bottomLeft, direction),
-            bottomRight: this.convertToGlobal(rect.bottomRight, direction),
+            topLeft: this.convertToGlobal(rect.topLeft, direction)!,
+            topRight: this.convertToGlobal(rect.topRight, direction)!,
+            bottomLeft: this.convertToGlobal(rect.bottomLeft, direction)!,
+            bottomRight: this.convertToGlobal(rect.bottomRight, direction)!,
         };
     }
 }

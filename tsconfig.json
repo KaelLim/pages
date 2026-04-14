@@ -3,16 +3,14 @@
     "target": "ES2022",
     "module": "ES2020",
     "moduleResolution": "bundler",
-    "declaration": true,
-    "declarationDir": "dist/types",
-    "rootDir": "./src",
     "strict": true,
     "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": false,
     "isolatedModules": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "rootDir": "src",
+    "noEmit": true
   },
   "include": ["src/**/*.ts"]
 }

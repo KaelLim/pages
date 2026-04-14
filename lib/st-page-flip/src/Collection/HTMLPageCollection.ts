@@ -35,6 +35,18 @@ export class HTMLPageCollection extends PageCollection {
             this.pages.push(page);
         }
 
+        this.addBlankPages();
         this.createSpread();
+    }
+
+    protected createBlankPage(): HTMLPage {
+        const div = document.createElement('div');
+        div.classList.add('stf__item', '--blank');
+        this.element.appendChild(div);
+
+        const page = new HTMLPage(this.render, div, PageDensity.SOFT);
+        page.load();
+
+        return page;
     }
 }

@@ -22,18 +22,18 @@ import './Style/stPageFlip.css';
  * @extends EventObject
  */
 export class PageFlip extends EventObject {
-    private mousePosition: Point;
+    private mousePosition: Point = { x: 0, y: 0 };
     private isUserTouch = false;
     private isUserMove = false;
 
-    private setting: FlipSetting = null;
+    private setting: FlipSetting;
     private readonly block: HTMLElement; // Root HTML Element
 
-    private pages: PageCollection = null;
-    private flipController: Flip;
-    private render: Render;
+    private pages!: PageCollection;
+    private flipController!: Flip;
+    private render!: Render;
 
-    private ui: UI;
+    private ui!: UI;
 
     /** Track which pages have already been requested for rendering */
     private requestedPages: Set<number> = new Set();
@@ -85,9 +85,14 @@ export class PageFlip extends EventObject {
         this.pages = new ImagePageCollection(this, this.render, imagesHref);
         this.pages.load();
 
+        this.setting.edgePageOffset = this.pages.getBlankCount() > 0
+            ? this.pages.realToInternal(0)
+            : 0;
+
         this.render.start();
 
-        this.pages.show(this.setting.startPage);
+        const internalStart = this.pages.realToInternal(this.setting.startPage);
+        this.pages.show(internalStart);
 
         // safari fix
         setTimeout(() => {
@@ -114,9 +119,16 @@ export class PageFlip extends EventObject {
         this.pages = new HTMLPageCollection(this, this.render, this.ui.getDistElement(), items);
         this.pages.load();
 
+        // Auto-calculate edgePageOffset from blank pages
+        this.setting.edgePageOffset = this.pages.getBlankCount() > 0
+            ? this.pages.realToInternal(0)
+            : 0;
+
         this.render.start();
 
-        this.pages.show(this.setting.startPage);
+        // startPage is a real (non-blank) index; convert to internal
+        const internalStart = this.pages.realToInternal(this.setting.startPage);
+        this.pages.show(internalStart);
 
         // safari fix
         setTimeout(() => {
@@ -192,12 +204,17 @@ export class PageFlip extends EventObject {
     }
 
     /**
-     * Turn to the specified page number (without animation)
+     * Turn to the specified real page number (without animation)
      *
-     * @param {number} page - New page number
+     * @param {number} page - Real page number (excluding blanks)
      */
     public turnToPage(page: number): void {
-        this.pages.show(page);
+        this.pages.show(this.pages.realToInternal(page));
+
+        // Snap edge progress instantly (no lerp) for direct page jumps
+        if (this.render instanceof CanvasRender) {
+            (this.render as CanvasRender).snapEdgeProgress();
+        }
     }
 
     /**
@@ -219,13 +236,13 @@ export class PageFlip extends EventObject {
     }
 
     /**
-     * Turn to the specified page number (with animation)
+     * Turn to the specified real page number (with animation)
      *
-     * @param {number} page - New page number
+     * @param {number} page - Real page number (excluding blanks)
      * @param {FlipCorner} corner - Active page corner when turning
      */
     public flip(page: number, corner: FlipCorner = FlipCorner.TOP): void {
-        this.flipController.flipToPage(page, corner);
+        this.flipController.flipToPage(this.pages.realToInternal(page), corner);
     }
 
     /**
@@ -243,7 +260,7 @@ export class PageFlip extends EventObject {
      * @param {number} newPage - New page Number
      */
     public updatePageIndex(newPage: number): void {
-        this.trigger('flip', this, newPage);
+        this.trigger('flip', this, this.pages.internalToReal(newPage));
         this.emitRenderPages();
     }
 
@@ -254,18 +271,21 @@ export class PageFlip extends EventObject {
     private emitRenderPages(): void {
         if (!this.pages || this.setting.preloadRange <= 0) return;
 
-        const current = this.pages.getCurrentPageIndex();
-        const total = this.pages.getPageCount();
+        const currentInternal = this.pages.getCurrentPageIndex();
+        const totalInternal = this.pages.getPageCount();
         const range = this.setting.preloadRange;
 
-        const start = Math.max(0, current - range);
-        const end = Math.min(total - 1, current + range + 1);
+        const start = Math.max(0, currentInternal - range);
+        const end = Math.min(totalInternal - 1, currentInternal + range + 1);
 
         const needed: number[] = [];
         for (let i = start; i <= end; i++) {
-            if (!this.requestedPages.has(i)) {
-                needed.push(i);
-                this.requestedPages.add(i);
+            if (this.pages.isBlankPage(i)) continue;
+
+            const realIdx = this.pages.internalToReal(i);
+            if (!this.requestedPages.has(realIdx)) {
+                needed.push(realIdx);
+                this.requestedPages.add(realIdx);
             }
         }
 
@@ -286,21 +306,21 @@ export class PageFlip extends EventObject {
     }
 
     /**
-     * Get the total number of pages in a book
+     * Get the total number of real (non-blank) pages in a book
      *
      * @returns {number}
      */
     public getPageCount(): number {
-        return this.pages.getPageCount();
+        return this.pages.getRealPageCount();
     }
 
     /**
-     * Get the index of the current page in the page list (starts at 0)
+     * Get the real (non-blank) index of the current page (starts at 0)
      *
      * @returns {number}
      */
     public getCurrentPageIndex(): number {
-        return this.pages.getCurrentPageIndex();
+        return this.pages.internalToReal(this.pages.getCurrentPageIndex());
     }
 
     /**
@@ -310,7 +330,22 @@ export class PageFlip extends EventObject {
      * @returns {Page}
      */
     public getPage(pageIndex: number): Page {
-        return this.pages.getPage(pageIndex);
+        return this.pages.getPage(this.pages.realToInternal(pageIndex));
+    }
+
+    /**
+     * Update the image source for a page (lazy loading for canvas mode).
+     * Accepts a real (non-blank) page index.
+     *
+     * @param {number} realPageIndex - Real page index (excluding blanks)
+     * @param {string} src - Image URL or data URL
+     */
+    public updatePageImage(realPageIndex: number, src: string): void {
+        const internalIdx = this.pages.realToInternal(realPageIndex);
+        const page = this.pages.getPage(internalIdx);
+        if (page && 'setImageSrc' in page) {
+            (page as any).setImageSrc(src);
+        }
     }
 
     /**
@@ -337,7 +372,7 @@ export class PageFlip extends EventObject {
      * @returns {Orientation} Сurrent orientation: portrait or landscape
      */
     public getOrientation(): Orientation {
-        return this.render.getOrientation();
+        return this.render.getOrientation()!;
     }
 
     /**
@@ -394,6 +429,18 @@ export class PageFlip extends EventObject {
     public setSizeMode(size: string, autoSize: boolean): void {
         this.updateSetting('size', size as any);
         this.updateSetting('autoSize', autoSize);
+        this.ui.applySizing();
+        this.update();
+    }
+
+    /**
+     * Toggle single-page (portrait) mode at runtime
+     */
+    public setForceSinglePage(enabled: boolean): void {
+        if (this.setting.forceSinglePage === enabled) return;
+
+        this.render.finishAnimation();
+        this.updateSetting('forceSinglePage', enabled);
         this.ui.applySizing();
         this.update();
     }

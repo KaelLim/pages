@@ -1,5 +1,5 @@
 import { Render } from '../Render/Render';
-import { Point } from '../BasicTypes';
+import { Point, CurlData } from '../BasicTypes';
 
 /**
  * State of the page on the basis of which rendering
@@ -9,7 +9,7 @@ export interface PageState {
     angle: number;
 
     /** Page scope */
-    area: Point[];
+    area: (Point | null)[];
 
     /** Page position */
     position: Point;
@@ -19,6 +19,9 @@ export interface PageState {
 
     /** Rotate angle for hard pages at renedering time */
     hardDrawingAngle: number;
+
+    /** Curl deformation data for Canvas rendering */
+    curlData: CurlData | null;
 }
 
 export const enum PageOrientation {
@@ -44,7 +47,7 @@ export abstract class Page {
     protected render: Render;
 
     /** Page Orientation */
-    protected orientation: PageOrientation;
+    protected orientation!: PageOrientation;
 
     /** Density at creation */
     protected createdDensity: PageDensity;
@@ -58,6 +61,7 @@ export abstract class Page {
             position: { x: 0, y: 0 },
             hardAngle: 0,
             hardDrawingAngle: 0,
+            curlData: null,
         };
 
         this.createdDensity = density;
@@ -124,11 +128,18 @@ export abstract class Page {
 
     /**
      * Set page crop area
-     * 
-     * @param {Point[]} area 
+     *
+     * @param {Point[]} area
      */
-    public setArea(area: Point[]): void {
+    public setArea(area: (Point | null)[]): void {
         this.state.area = area;
+    }
+
+    /**
+     * Set curl deformation data
+     */
+    public setCurlData(curlData: CurlData | null): void {
+        this.state.curlData = curlData;
     }
 
     /**
@@ -181,6 +192,6 @@ export abstract class Page {
     }
 
     public abstract newTemporaryCopy(): Page;
-    public abstract getTemporaryCopy(): Page;
+    public abstract getTemporaryCopy(): Page | null;
     public abstract hideTemporaryCopy(): void;
 }

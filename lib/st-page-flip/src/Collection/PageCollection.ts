@@ -23,6 +23,12 @@ export abstract class PageCollection {
     /**  One-page spread in portrait mode */
     protected portraitSpread: NumberArray[] = [];
 
+    /** Blank pages inserted for spread padding */
+    protected blankPages: Page[] = [];
+
+    /** Number of blank pages before the first real page */
+    protected blankStartCount = 0;
+
     protected constructor(app: PageFlip, render: Render) {
         this.render = render;
         this.app = app;
@@ -36,10 +42,86 @@ export abstract class PageCollection {
     public abstract load(): void;
 
     /**
+     * Create a blank page element for spread padding
+     */
+    protected abstract createBlankPage(): Page;
+
+    /**
      * Clear pages list
      */
     public destroy(): void {
         this.pages = [];
+        this.blankPages = [];
+    }
+
+    /**
+     * Insert blank pages so every landscape spread has exactly 2 pages.
+     * Blank at the front (LTR) or end (RTL) prevents the single-page-spread
+     * DOM conflict where flippingPage === bottomPage.
+     */
+    protected addBlankPages(): void {
+        const rtl = this.app.getSettings().rtl;
+
+        if (rtl) {
+            const blank = this.createBlankPage();
+            this.pages.push(blank);
+            this.blankPages.push(blank);
+        } else {
+            const blank = this.createBlankPage();
+            this.pages.unshift(blank);
+            this.blankPages.push(blank);
+            this.blankStartCount++;
+        }
+
+        // If still odd, add another blank at the opposite end
+        if (this.pages.length % 2 !== 0) {
+            const blank = this.createBlankPage();
+            if (rtl) {
+                this.pages.unshift(blank);
+                this.blankStartCount++;
+            } else {
+                this.pages.push(blank);
+            }
+            this.blankPages.push(blank);
+        }
+    }
+
+    /**
+     * Check if a page index refers to a blank page
+     */
+    public isBlankPage(pageIndex: number): boolean {
+        return pageIndex >= 0 && pageIndex < this.pages.length &&
+            this.blankPages.indexOf(this.pages[pageIndex]!) >= 0;
+    }
+
+    /**
+     * Get the number of blank pages
+     */
+    public getBlankCount(): number {
+        return this.blankPages.length;
+    }
+
+    /**
+     * Get the number of real (non-blank) pages
+     */
+    public getRealPageCount(): number {
+        return this.pages.length - this.blankPages.length;
+    }
+
+    /**
+     * Convert internal page index to real (non-blank) page index.
+     * Returns -1 if the internal index refers to a blank page.
+     */
+    public internalToReal(internalIdx: number): number {
+        if (this.isBlankPage(internalIdx)) return -1;
+        return internalIdx - this.blankStartCount;
+    }
+
+    /**
+     * Convert real (non-blank) page index to internal page index.
+     */
+    public realToInternal(realIdx: number): number {
+        return realIdx + this.blankStartCount;
     }
 
     /**
@@ -49,17 +131,15 @@ export abstract class PageCollection {
         this.landscapeSpread = [];
         this.portraitSpread = [];
 
+        // Portrait: each non-blank page is its own spread
         for (let i = 0; i < this.pages.length; i++) {
-            this.portraitSpread.push([i]); // In portrait mode - (one spread = one page)
+            if (!this.isBlankPage(i)) {
+                this.portraitSpread.push([i]);
+            }
         }
 
-        let start = 0;
-        if (this.app.getSettings().showCover) {
-            this.landscapeSpread.push([start]);
-            start++;
-        }
-
-        for (let i = start; i < this.pages.length; i += 2) {
+        // Landscape: always pair pages (blanks included for padding)
+        for (let i = 0; i < this.pages.length; i += 2) {
             if (i < this.pages.length - 1) this.landscapeSpread.push([i, i + 1]);
             else {
                 this.landscapeSpread.push([i]);
@@ -88,11 +168,13 @@ export abstract class PageCollection {
      *
      * @param {number} pageNum - page index
      */
-    public getSpreadIndexByPage(pageNum: number): number {
+    public getSpreadIndexByPage(pageNum: number): number | null {
         const spread = this.getSpread();
 
-        for (let i = 0; i < spread.length; i++)
-            if (pageNum === spread[i][0] || pageNum === spread[i][1]) return i;
+        for (let i = 0; i < spread.length; i++) {
+            const s = spread[i]!;
+            if (pageNum === s[0] || pageNum === s[1]) return i;
+        }
 
         return null;
     }
@@ -118,7 +200,7 @@ export abstract class PageCollection {
      */
     public getPage(pageIndex: number): Page {
         if (pageIndex >= 0 && pageIndex < this.pages.length) {
-            return this.pages[pageIndex];
+            return this.pages[pageIndex]!;
         }
 
         throw new Error('Invalid page number');
@@ -129,10 +211,10 @@ export abstract class PageCollection {
      *
      * @param {Page} current
      */
-    public nextBy(current: Page): Page {
+    public nextBy(current: Page): Page | null {
         const idx = this.pages.indexOf(current);
 
-        if (idx < this.pages.length - 1) return this.pages[idx + 1];
+        if (idx < this.pages.length - 1) return this.pages[idx + 1]!;
 
         return null;
     }
@@ -142,10 +224,10 @@ export abstract class PageCollection {
      *
      * @param {Page} current
      */
-    public prevBy(current: Page): Page {
+    public prevBy(current: Page): Page | null {
         const idx = this.pages.indexOf(current);
 
-        if (idx > 0) return this.pages[idx - 1];
+        if (idx > 0) return this.pages[idx - 1]!;
 
         return null;
     }
@@ -157,22 +239,27 @@ export abstract class PageCollection {
      */
     public getFlippingPage(direction: FlipDirection): Page {
         const current = this.currentSpreadIndex;
+        const spreads = this.getSpread();
 
         if (this.render.getOrientation() === Orientation.PORTRAIT) {
-            return direction === FlipDirection.FORWARD
-                ? this.pages[current].newTemporaryCopy()
-                : this.pages[current - 1];
+            const curPageIdx = spreads[current]![0]!;
+            if (direction === FlipDirection.FORWARD) {
+                return this.pages[curPageIdx]!.newTemporaryCopy();
+            } else {
+                const prevPageIdx = spreads[current - 1]![0]!;
+                return this.pages[prevPageIdx]!;
+            }
         } else {
             const spread =
                 direction === FlipDirection.FORWARD
-                    ? this.getSpread()[current + 1]
-                    : this.getSpread()[current - 1];
+                    ? spreads[current + 1]!
+                    : spreads[current - 1]!;
 
-            if (spread.length === 1) return this.pages[spread[0]];
+            if (spread.length === 1) return this.pages[spread[0]!]!;
 
             return direction === FlipDirection.FORWARD
-                ? this.pages[spread[0]]
-                : this.pages[spread[1]];
+                ? this.pages[spread[0]!]!
+                : this.pages[spread[1]!]!;
         }
     }
 
@@ -183,22 +270,24 @@ export abstract class PageCollection {
      */
     public getBottomPage(direction: FlipDirection): Page {
         const current = this.currentSpreadIndex;
+        const spreads = this.getSpread();
 
         if (this.render.getOrientation() === Orientation.PORTRAIT) {
-            return direction === FlipDirection.FORWARD
-                ? this.pages[current + 1]
-                : this.pages[current - 1];
+            const targetSpread = direction === FlipDirection.FORWARD
+                ? spreads[current + 1]!
+                : spreads[current - 1]!;
+            return this.pages[targetSpread[0]!]!;
         } else {
             const spread =
                 direction === FlipDirection.FORWARD
-                    ? this.getSpread()[current + 1]
-                    : this.getSpread()[current - 1];
+                    ? spreads[current + 1]!
+                    : spreads[current - 1]!;
 
-            if (spread.length === 1) return this.pages[spread[0]];
+            if (spread.length === 1) return this.pages[spread[0]!]!;
 
             return direction === FlipDirection.FORWARD
-                ? this.pages[spread[1]]
-                : this.pages[spread[0]];
+                ? this.pages[spread[1]!]!
+                : this.pages[spread[0]!]!;
         }
     }
 
@@ -233,12 +322,28 @@ export abstract class PageCollection {
      * Show specified page
      * @param {number} pageNum - Page index (from 0s)
      */
-    public show(pageNum: number = null): void {
+    public show(pageNum: number | null = null): void {
         if (pageNum === null) pageNum = this.currentPageIndex;
 
         if (pageNum < 0 || pageNum >= this.pages.length) return;
 
-        const spreadIndex = this.getSpreadIndexByPage(pageNum);
+        let spreadIndex = this.getSpreadIndexByPage(pageNum);
+
+        // If page not in current spreads (e.g. blank page in portrait mode),
+        // find the nearest valid spread by scanning forward then backward.
+        if (spreadIndex === null) {
+            for (let i = pageNum + 1; i < this.pages.length; i++) {
+                spreadIndex = this.getSpreadIndexByPage(i);
+                if (spreadIndex !== null) break;
+            }
+            if (spreadIndex === null) {
+                for (let i = pageNum - 1; i >= 0; i--) {
+                    spreadIndex = this.getSpreadIndexByPage(i);
+                    if (spreadIndex !== null) break;
+                }
+            }
+        }
+
         if (spreadIndex !== null) {
             this.currentSpreadIndex = spreadIndex;
             this.showSpread();
@@ -269,27 +374,28 @@ export abstract class PageCollection {
      * Show current spread
      */
     private showSpread(): void {
-        const spread = this.getSpread()[this.currentSpreadIndex];
+        const spread = this.getSpread()[this.currentSpreadIndex]!;
 
         if (spread.length === 2) {
-            this.render.setLeftPage(this.pages[spread[0]]);
-            this.render.setRightPage(this.pages[spread[1]]);
+            this.render.setLeftPage(this.pages[spread[0]!]!);
+            this.render.setRightPage(this.pages[spread[1]!]!);
         } else {
+            const pageIdx = spread[0]!;
             if (this.render.getOrientation() === Orientation.LANDSCAPE) {
-                if (spread[0] === this.pages.length - 1) {
-                    this.render.setLeftPage(this.pages[spread[0]]);
+                if (pageIdx === this.pages.length - 1) {
+                    this.render.setLeftPage(this.pages[pageIdx]!);
                     this.render.setRightPage(null);
                 } else {
                     this.render.setLeftPage(null);
-                    this.render.setRightPage(this.pages[spread[0]]);
+                    this.render.setRightPage(this.pages[pageIdx]!);
                 }
             } else {
                 this.render.setLeftPage(null);
-                this.render.setRightPage(this.pages[spread[0]]);
+                this.render.setRightPage(this.pages[pageIdx]!);
             }
         }
 
-        this.currentPageIndex = spread[0];
+        this.currentPageIndex = spread[0]!;
         this.app.updatePageIndex(this.currentPageIndex);
     }
 }

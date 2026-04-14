@@ -10,7 +10,7 @@ export class Helper {
      * @param {Point} point1
      * @param {Point} point2
      */
-    public static GetDistanceBetweenTwoPoint(point1: Point, point2: Point): number {
+    public static GetDistanceBetweenTwoPoint(point1: Point | null, point2: Point | null): number {
         if (point1 === null || point2 === null) {
             return Infinity;
         }
@@ -51,7 +51,7 @@ export class Helper {
      *
      * @returns {Point} If the point enters the rectangle its coordinates will be returned, otherwise - null
      */
-    public static PointInRect(rect: Rect, pos: Point): Point {
+    public static PointInRect(rect: Rect, pos: Point | null): Point | null {
         if (pos === null) {
             return null;
         }
@@ -127,7 +127,7 @@ export class Helper {
      *
      * @returns {Point} The intersection point, or "null" if it does not exist, or it lies outside the rectangle "rectBorder"
      */
-    public static GetIntersectBetweenTwoSegment(rectBorder: Rect, one: Segment, two: Segment): Point {
+    public static GetIntersectBetweenTwoSegment(rectBorder: Rect, one: Segment, two: Segment): Point | null {
         return Helper.PointInRect(rectBorder, Helper.GetIntersectBeetwenTwoLine(one, two));
     }
 
@@ -140,7 +140,7 @@ export class Helper {
      * @returns {Point} The intersection point, or "null" if it does not exist
      * @throws Error if the segments are on the same line
      */
-    public static GetIntersectBeetwenTwoLine(one: Segment, two: Segment): Point {
+    public static GetIntersectBeetwenTwoLine(one: Segment, two: Segment): Point | null {
         const A1 = one[0].y - one[1].y;
         const A2 = two[0].y - two[1].y;
 

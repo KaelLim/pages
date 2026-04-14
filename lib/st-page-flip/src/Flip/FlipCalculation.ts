@@ -7,16 +7,16 @@ import { FlipCorner, FlipDirection } from './Flip';
  */
 export class FlipCalculation {
     /** Calculated rotation angle to flipping page */
-    private angle: number;
+    private angle!: number;
     /** Calculated position to flipping page */
-    private position: Point;
+    private position!: Point;
 
-    private rect: RectPoints;
+    private rect!: RectPoints;
 
     /** The point of intersection of the page with the borders of the book */
-    private topIntersectPoint: Point = null; // With top border
-    private sideIntersectPoint: Point = null; // With side border
-    private bottomIntersectPoint: Point = null; // With bottom border
+    private topIntersectPoint: Point | null = null; // With top border
+    private sideIntersectPoint: Point | null = null; // With side border
+    private bottomIntersectPoint: Point | null = null; // With bottom border
 
     private readonly pageWidth: number;
     private readonly pageHeight: number;
@@ -65,7 +65,7 @@ export class FlipCalculation {
      * 
      * @returns {Point[]} Polygon page
      */
-    public getFlippingClipArea(): Point[] {
+    public getFlippingClipArea(): (Point | null)[] {
         const result = [];
         let clipBottom = false;
 
@@ -94,7 +94,7 @@ export class FlipCalculation {
      * 
      * @returns {Point[]} Polygon page
      */
-    public getBottomClipArea(): Point[] {
+    public getBottomClipArea(): (Point | null)[] {
         const result = [];
 
         result.push(this.topIntersectPoint);
@@ -201,11 +201,11 @@ export class FlipCalculation {
      */
     public getShadowStartPoint(): Point {
         if (this.corner === FlipCorner.TOP) {
-            return this.topIntersectPoint;
+            return this.topIntersectPoint!;
         } else {
             if (this.sideIntersectPoint !== null) return this.sideIntersectPoint;
 
-            return this.topIntersectPoint;
+            return this.topIntersectPoint!;
         }
     }
 
@@ -223,6 +223,17 @@ export class FlipCalculation {
         }
 
         return Math.PI - angle;
+    }
+
+    /**
+     * Get the fold line endpoints (top and bottom intersection points).
+     * Used by CurlCalculation to compute the bezier fold curve.
+     */
+    public getFoldLine(): [Point, Point] {
+        return [
+            this.topIntersectPoint || { x: this.pageWidth, y: 0 },
+            this.bottomIntersectPoint || { x: this.pageWidth, y: this.pageHeight },
+        ];
     }
 
     private calcAngleAndPosition(pos: Point): Point {
@@ -300,10 +311,10 @@ export class FlipCalculation {
 
     private getRectFromBasePoint(points: Point[], localPos: Point): RectPoints {
         return {
-            topLeft: this.getRotatedPoint(points[0], localPos),
-            topRight: this.getRotatedPoint(points[1], localPos),
-            bottomLeft: this.getRotatedPoint(points[2], localPos),
-            bottomRight: this.getRotatedPoint(points[3], localPos),
+            topLeft: this.getRotatedPoint(points[0]!, localPos),
+            topRight: this.getRotatedPoint(points[1]!, localPos),
+            bottomLeft: this.getRotatedPoint(points[2]!, localPos),
+            bottomRight: this.getRotatedPoint(points[3]!, localPos),
         };
     }
 
@@ -322,10 +333,10 @@ export class FlipCalculation {
 
     private calculateIntersectPoint(pos: Point): void {
         const boundRect: Rect = {
-            left: -1,
-            top: -1,
-            width: this.pageWidth + 2,
-            height: this.pageHeight + 2,
+            left: -0.1,
+            top: -0.1,
+            width: this.pageWidth + 0.2,
+            height: this.pageHeight + 0.2,
         };
 
         if (this.corner === FlipCorner.TOP) {
@@ -428,6 +439,6 @@ export class FlipCalculation {
                 ? this.sideIntersectPoint
                 : this.bottomIntersectPoint;
 
-        return [first, second];
+        return [first, second!];
     }
 }

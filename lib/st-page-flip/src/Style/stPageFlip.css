@@ -3,6 +3,7 @@
   display: block;
   box-sizing: border-box;
   transform: translateZ(0);
+  background: transparent;
 
   -ms-touch-action: pan-y;
   touch-action: pan-y;
@@ -12,6 +13,7 @@
   position: relative;
   width: 100%;
   box-sizing: border-box;
+  overflow: visible;
 }
 
 .stf__parent canvas {
@@ -20,6 +22,8 @@
   height: 100%;
   left: 0;
   top: 0;
+  background: transparent;
+  border: none;
 }
 
 .stf__block {
@@ -28,6 +32,8 @@
   height: 100%;
   box-sizing: border-box;
   perspective: 2000px;
+  overflow: hidden;
+  padding: 1px;
 }
 
 .stf__item {
@@ -58,4 +64,8 @@
   position: absolute;
   left: 0;
   top: 0;
+}
+
+.stf__item.--blank {
+  background: var(--stf-blank-bg, #000);
 }
