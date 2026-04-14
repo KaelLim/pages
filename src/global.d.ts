@@ -20,6 +20,19 @@ interface PDFDocumentProxy {
   numPages: number;
   getPage(pageNum: number): Promise<PDFPageProxy>;
   getMetadata(): Promise<{ info?: { Title?: string; Author?: string; Subject?: string } }>;
+  getOutline(): Promise<PDFOutlineItem[] | null>;
+  getDestination(dest: string): Promise<unknown[] | null>;
+  getPageIndex(ref: unknown): Promise<number>;
+}
+
+interface PDFOutlineItem {
+  title: string;
+  bold?: boolean;
+  italic?: boolean;
+  color?: Uint8ClampedArray;
+  dest: string | unknown[] | null;
+  url?: string | null;
+  items: PDFOutlineItem[];
 }
 
 interface PDFPageProxy {

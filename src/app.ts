@@ -1,4 +1,5 @@
 import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.6.205/build/pdf.min.mjs';
+import { extractToc, flattenToc, computeSiblingIndex, type TocItem } from './toc.js';
 
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -194,6 +195,9 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
           `PDF document: ${meta.info.Title}, use arrow keys to navigate pages`);
       }
     } catch { /* metadata optional */ }
+
+    // 1c. Extract table of contents (PDF outline)
+    const tocTree = await extractToc(pdf).catch(() => null);
 
     // 2. Render only the first page to get dimensions
     loadingEl.textContent = 'Rendering...';
@@ -693,6 +697,123 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
       (btnThumbnail as HTMLElement).focus();
     });
 
+    // ── Table of contents ──
+    if (tocTree) {
+      setupToc(tocTree);
+    }
+
+    function setupToc(tree: TocItem[]): void {
+      const btnToc = document.getElementById('btn-toc')!;
+      const tocOverlay = document.getElementById('toc-overlay')!;
+      const tocList = document.getElementById('toc-list')!;
+      const btnTocClose = document.getElementById('btn-toc-close')!;
+
+      const flat = flattenToc(tree);
+      const siblingIdx = computeSiblingIndex(tree);
+      const rows: HTMLButtonElement[] = [];
+
+      // Build TOC rows
+      for (const item of flat) {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'toc-item';
+        row.setAttribute('role', 'treeitem');
+        row.setAttribute('aria-level', String(item.depth + 1));
+        const sib = siblingIdx.get(item);
+        if (sib) {
+          row.setAttribute('aria-posinset', String(sib.pos));
+          row.setAttribute('aria-setsize', String(sib.size));
+        }
+        row.style.paddingLeft = `${12 + item.depth * 20}px`;
+        row.dataset.page = String(item.page);
+        row.title = item.title;
+
+        const titleEl = document.createElement('span');
+        titleEl.className = 'toc-title';
+        titleEl.textContent = item.title;
+
+        const pageEl = document.createElement('span');
+        pageEl.className = 'toc-page';
+        pageEl.textContent = String(item.page);
+        pageEl.setAttribute('aria-label', `Page ${item.page}`);
+
+        row.append(titleEl, pageEl);
+        row.addEventListener('click', () => jumpToTocItem(item));
+        tocList.appendChild(row);
+        rows.push(row);
+      }
+
+      btnToc.classList.remove('hidden');
+
+      function jumpToTocItem(item: TocItem): void {
+        const realIdx = currentPageMap.indexOf(item.page);
+        if (realIdx >= 0) {
+          pageFlip!.turnToPage(realIdx);
+          updatePageInfo();
+        }
+        tocOverlay.classList.add('hidden');
+        (btnToc as HTMLElement).focus();
+        if (viewerConfig.analytics?.trackNavigation) {
+          trackEvent('navigate', { action: 'toc_jump', page: item.page });
+        }
+      }
+
+      function updateCurrent(): void {
+        const currentPage = getOriginalPage();
+        // Find the deepest item whose page <= currentPage
+        let activeRow: HTMLButtonElement | null = null;
+        for (const row of rows) {
+          const page = parseInt(row.dataset.page!, 10);
+          if (page <= currentPage) activeRow = row;
+          else break;
+        }
+        rows.forEach(r => r.removeAttribute('aria-current'));
+        activeRow?.setAttribute('aria-current', 'page');
+      }
+
+      // Open TOC
+      btnToc.addEventListener('click', () => {
+        updateCurrent();
+        tocOverlay.classList.remove('hidden');
+        const active = tocList.querySelector<HTMLButtonElement>('.toc-item[aria-current="page"]');
+        (active ?? rows[0])?.focus();
+        active?.scrollIntoView({ block: 'center' });
+        if (viewerConfig.analytics?.trackNavigation) {
+          trackEvent('navigate', { action: 'toc_open' });
+        }
+      });
+
+      btnTocClose.addEventListener('click', () => {
+        tocOverlay.classList.add('hidden');
+        (btnToc as HTMLElement).focus();
+      });
+
+      // Keyboard navigation within the overlay
+      tocOverlay.addEventListener('keydown', (e: KeyboardEvent) => {
+        const idx = rows.indexOf(document.activeElement as HTMLButtonElement);
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          rows[Math.min(idx + 1, rows.length - 1)]?.focus();
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          rows[Math.max(idx - 1, 0)]?.focus();
+        } else if (e.key === 'Home') {
+          e.preventDefault();
+          rows[0]?.focus();
+        } else if (e.key === 'End') {
+          e.preventDefault();
+          rows[rows.length - 1]?.focus();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          tocOverlay.classList.add('hidden');
+          (btnToc as HTMLElement).focus();
+        }
+      });
+
+      // Update current chapter highlight on every flip
+      pageFlip?.on('flip', updateCurrent);
+    }
+
     // Share
     btnShare.addEventListener('click', async () => {
       // Share clean URL without potentially sensitive query params
@@ -714,6 +835,11 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
 
     // 7. Arrow key navigation
     document.addEventListener('keydown', (e: KeyboardEvent) => {
+      const tocOverlay = document.getElementById('toc-overlay');
+      if (tocOverlay && !tocOverlay.classList.contains('hidden')) {
+        // TOC overlay handles its own keydown (arrows, Escape). Skip page nav here.
+        return;
+      }
       if (!thumbOverlay.classList.contains('hidden')) {
         if (e.key === 'Escape') thumbOverlay.classList.add('hidden');
         return;

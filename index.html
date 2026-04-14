@@ -40,6 +40,9 @@
       <span class="material-symbols-rounded" aria-hidden="true">zoom_in</span>
     </button>
     <div id="toolbar-divider"></div>
+    <button id="btn-toc" class="hidden" title="Table of contents" aria-label="Show table of contents">
+      <span class="material-symbols-rounded" aria-hidden="true">list</span>
+    </button>
     <button id="btn-thumbnail" title="Thumbnails" aria-label="Show page thumbnails">
       <span class="material-symbols-rounded" aria-hidden="true">grid_view</span>
     </button>
@@ -66,6 +69,17 @@
       </button>
     </div>
     <div id="thumbnail-grid" role="grid" aria-label="Page thumbnail grid"></div>
+  </div>
+
+  <!-- Table of contents overlay -->
+  <div id="toc-overlay" class="hidden" role="dialog" aria-labelledby="toc-header-title" aria-modal="true">
+    <div id="toc-header">
+      <span id="toc-header-title">Contents</span>
+      <button id="btn-toc-close" aria-label="Close table of contents">
+        <span class="material-symbols-rounded" aria-hidden="true">close</span>
+      </button>
+    </div>
+    <div id="toc-list" role="tree" aria-label="Chapter list"></div>
   </div>
 
   <!-- Password prompt for encrypted PDFs (ISO 32000) -->
