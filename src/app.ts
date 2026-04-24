@@ -40,6 +40,9 @@ interface ViewerAnalyticsConfig {
 
 interface ViewerConfig {
   pdf?: string;
+  // 'left' = right-to-left reading (Chinese); 'right' = left-to-right (English).
+  // Omit to start LTR; user can still toggle via the RTL button.
+  turnPage?: 'left' | 'right';
   analytics?: ViewerAnalyticsConfig;
 }
 
@@ -272,7 +275,7 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
     const renderedPages = new Map<number, string>();
     renderedPages.set(1, firstPage.dataUrl);
 
-    let isRtl = false;
+    let isRtl = viewerConfig.turnPage === 'left';
     let pageFlip: St.PageFlip | null = null;
     let currentPageMap: number[] = [];
     let lastSoundTime = 0;
@@ -468,13 +471,14 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
       }, 200);
     });
 
-    // 4. Build initial book (LTR), optionally restoring last read page
+    // 4. Build initial book, optionally restoring last read page.
+    // Reading direction: controlled by viewerConfig.turnPage (default LTR).
     const lastPageKey = `pdfviewer:lastpage:${pdfUrl}`;
     const savedPage = Number(localStorage.getItem(lastPageKey));
     const initialPage = Number.isFinite(savedPage) && savedPage > 0 && savedPage <= numPages
       ? savedPage
       : undefined;
-    buildBook(false, initialPage);
+    buildBook(isRtl, initialPage);
     updateTextLayer();
 
     // 5. Hide loading indicator
@@ -502,6 +506,12 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
     const zoomInfoEl = document.getElementById('zoom-info')!;
     const bookArea = document.getElementById('book-area')!;
     const btnRtl = document.getElementById('btn-rtl')!;
+
+    // Sync RTL button visual state with initial isRtl (from viewerConfig.turnPage)
+    if (isRtl) {
+      setIconText(btnRtl, 'format_textdirection_l_to_r');
+      (btnRtl as HTMLElement).style.background = 'rgba(255,255,255,0.25)';
+    }
 
     // Zoom & pan state
     let zoomLevel = 1;
