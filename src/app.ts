@@ -9,9 +9,9 @@ import { extractLinks, resolveDestPage, type LinkInfo } from './links.js';
 const { lib: pdfjsLib, cMapUrl: pdfCmapUrl, version: pdfjsVersion, line: pdfjsLine } = await loadPdfJs();
 console.log(`[pdf.js] loaded ${pdfjsLine} ${pdfjsVersion}`);
 
-// PDF render scale: must be >= canvas buffer DPR (2x) to avoid upscaling blur.
-// 3x ensures source image covers 2x canvas buffer at typical page widths.
-const RENDER_SCALE = 3;
+// Scale 2 = 1:1 pixel mapping on 2x DPR displays. Enough for Retina
+// without doubling CPU/memory cost. Zoom past 1.5x will soften slightly.
+const RENDER_SCALE = 2;
 
 // Feature-detect WebP support once at startup.
 // WebP saves ~30-50% bandwidth/memory vs PNG with same visual quality.
@@ -26,6 +26,26 @@ const SUPPORTS_WEBP: boolean = (() => {
 })();
 const DEFAULT_PDF = './sample.pdf';
 const CORS_PROXY = 'https://corsproxy.io/?url=';
+
+// Paper-textured placeholder shown while a page hasn't been rendered yet.
+// Inline SVG so it renders instantly without a second network request.
+const PAGE_PLACEHOLDER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 566" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="pg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#faf6ec"/>
+      <stop offset="1" stop-color="#ece4d2"/>
+    </linearGradient>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#pg)"/>
+  <rect x="20" y="20" width="360" height="526" fill="none" stroke="rgba(120,100,70,0.08)" stroke-width="1"/>
+  <g transform="translate(200,283)">
+    <circle r="20" fill="none" stroke="rgba(100,85,60,0.12)" stroke-width="3.5"/>
+    <circle r="20" fill="none" stroke="rgba(90,75,50,0.55)" stroke-width="3.5" stroke-dasharray="41 122" stroke-linecap="round">
+      <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="1.1s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+</svg>`;
+const PAGE_PLACEHOLDER = 'data:image/svg+xml;utf8,' + encodeURIComponent(PAGE_PLACEHOLDER_SVG);
 
 // ── GA4 / GTM Analytics ──
 
@@ -104,7 +124,6 @@ async function renderPageToImage(pdf: PDFDocumentProxy, pageNum: number): Promis
   await page.render({ canvasContext: ctx, viewport }).promise;
 
   return {
-    // Use WebP at 92% quality when supported — visually identical, ~30-50% smaller.
     dataUrl: SUPPORTS_WEBP
       ? canvas.toDataURL('image/webp', 0.92)
       : canvas.toDataURL('image/png'),
@@ -125,7 +144,6 @@ async function renderPageCached(
   const key = buildCacheKey(pdfUrl, pageNum, RENDER_SCALE);
   const cached = await getCachedPage(key);
   if (cached) {
-    // Derive dimensions from the PDF page without full render
     const page = await pdf.getPage(pageNum);
     const vp = page.getViewport({ scale: RENDER_SCALE });
     return { dataUrl: cached, width: vp.width, height: vp.height };
@@ -280,6 +298,51 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
     let currentPageMap: number[] = [];
     let lastSoundTime = 0;
 
+    // Serial render queue: one PDF.js render at a time. Prevents main-thread
+    // thrashing when flips come fast or pages are re-requested.
+    let activeRender: Promise<void> = Promise.resolve();
+
+    function renderCurrentVisible(): void {
+      activeRender = activeRender.then(async () => {
+        if (!pageFlip) return;
+        const currentIdx = pageFlip.getCurrentPageIndex();
+        const isPortrait = pageFlip.getOrientation() === 'portrait';
+
+        // Current spread (must render)
+        const visible: number[] = [currentIdx];
+        if (!isPortrait) visible.push(currentIdx + 1);
+
+        // Next spread preload (direction-aware: RTL flips toward smaller idx)
+        const direction = isRtl ? -1 : 1;
+        const stride = isPortrait ? 1 : 2;
+        const preload: number[] = [currentIdx + direction * stride];
+        if (!isPortrait) preload.push(currentIdx + direction * stride + 1);
+
+        for (const idx of [...visible, ...preload]) {
+          if (idx < 0 || idx >= currentPageMap.length) continue;
+          const originalPage = currentPageMap[idx];
+          if (!originalPage) continue;
+          if (renderedPages.has(originalPage)) {
+            pageFlip.updatePageImage(idx, renderedPages.get(originalPage)!);
+            continue;
+          }
+          try {
+            const data = await renderPageCached(pdf, originalPage, pdfUrl);
+            renderedPages.set(originalPage, data.dataUrl);
+            // User may have flipped away — only paint if still on this spread
+            const nowIdx = pageFlip.getCurrentPageIndex();
+            const nowIsPortrait = pageFlip.getOrientation() === 'portrait';
+            if (nowIdx === idx || (!nowIsPortrait && nowIdx + 1 === idx)) {
+              pageFlip.updatePageImage(idx, data.dataUrl);
+            } else if (visible.includes(idx)) {
+              // Still useful if user flipped back quickly — paint anyway
+              pageFlip.updatePageImage(idx, data.dataUrl);
+            }
+          } catch { /* non-fatal */ }
+        }
+      }).catch(() => {});
+    }
+
     // Reading time tracking: accumulate dwell time per page
     let currentPageEnterTime = Date.now();
     let currentPageForTiming = 0;
@@ -366,10 +429,9 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
       currentPageMap = [...pageNums];
       const totalBookPages = currentPageMap.length;
 
-      // Create image URL array — use cached renders or transparent placeholder
-      const placeholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+      // Use cached renders or paper-gradient+spinner placeholder
       const imageHrefs = currentPageMap.map(num =>
-        renderedPages.get(num) ?? placeholder
+        renderedPages.get(num) ?? PAGE_PLACEHOLDER
       );
 
       pageFlip = new St.PageFlip(bookEl, {
@@ -388,7 +450,7 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
         usePortrait: true,
         useMouseEvents: mouseEvents,
         showEdge: true,
-        preloadRange: 3,
+        preloadRange: 1,
         startPage: 0,
         // Mesh strip curl disabled — Canvas 2D can't render seamless quads,
         // which caused visible diagonal seams. Flat rotation (like original
@@ -398,23 +460,9 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
         canvasBgColor: 'transparent',
       });
 
-      // Lazy render: load PDF pages on demand via canvas API
-      pageFlip.on('renderPages', async (e) => {
-        const indices = e.data as number[];
-        for (const idx of indices) {
-          if (idx < 0 || idx >= currentPageMap.length) continue;
-          const originalPage = currentPageMap[idx]!;
-          if (!originalPage) continue;
-          if (renderedPages.has(originalPage)) {
-            pageFlip!.updatePageImage(idx, renderedPages.get(originalPage)!);
-            continue;
-          }
-          const pageData = await renderPageCached(pdf, originalPage, pdfUrl);
-          renderedPages.set(originalPage, pageData.dataUrl);
-          pageFlip!.updatePageImage(idx, pageData.dataUrl);
-        }
-      });
-
+      // StPageFlip's renderPages event emits many pages at init and has a
+      // requestedPages dedup bug in our fork. We ignore it entirely and
+      // drive rendering from the flip event via renderCurrentVisible().
       pageFlip.loadFromImages(imageHrefs);
 
       if (targetOriginalPage !== undefined) {
@@ -423,6 +471,9 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
       } else {
         pageFlip.turnToPage(rtl ? totalBookPages - 1 : 0);
       }
+
+      // Initial render of the current spread + next spread (direction-aware)
+      renderCurrentVisible();
 
       pageFlip.on('flip', () => {
         const now = Date.now();
@@ -449,6 +500,9 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
 
         // Broadcast so TOC / link overlays survive buildBook rebuilds.
         document.dispatchEvent(new CustomEvent('viewer:flip'));
+
+        // Render current spread + next spread on demand
+        renderCurrentVisible();
       });
 
       // Initialize timer for starting page
@@ -486,6 +540,30 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
 
     // GA4: PDF loaded
     trackEvent('pdf_loaded', { pages: numPages, title: document.title });
+
+    // 5a. Background-preload the opening pages 500ms after READY so that
+    // jumping to page 1 (via TOC / slider / "first" button) is instant.
+    // Independent of RTL — always page 1/2/3 of the PDF itself.
+    setTimeout(() => {
+      void (async () => {
+        for (const pageNum of [1, 2, 3]) {
+          if (pageNum > numPages) break;
+          if (renderedPages.has(pageNum)) continue;
+          try {
+            const data = await renderPageCached(pdf, pageNum, pdfUrl);
+            renderedPages.set(pageNum, data.dataUrl);
+            // If it's currently visible, paint it now
+            const realIdx = currentPageMap.indexOf(pageNum);
+            if (realIdx < 0 || !pageFlip) continue;
+            const currentIdx = pageFlip.getCurrentPageIndex();
+            const isPortrait = pageFlip.getOrientation() === 'portrait';
+            if (realIdx === currentIdx || (!isPortrait && realIdx === currentIdx + 1)) {
+              pageFlip.updatePageImage(realIdx, data.dataUrl);
+            }
+          } catch { /* non-fatal */ }
+        }
+      })();
+    }, 500);
 
     // 6. Controls
     const toolbar = document.getElementById('toolbar')!;
@@ -752,6 +830,30 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
       }
     }
 
+    // Serial queue for thumbnail renders — runs independently of viewer
+    // renders so the main spread takes priority.
+    let thumbRenderQueue: Promise<void> = Promise.resolve();
+    // Tiny 1x1 transparent GIF; visible as blank until IntersectionObserver fires.
+    const THUMB_PLACEHOLDER = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+    const thumbObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const img = entry.target as HTMLImageElement;
+        const pageNum = Number(img.dataset.pageNum);
+        if (!pageNum) continue;
+        thumbObserver.unobserve(img);
+        thumbRenderQueue = thumbRenderQueue.then(async () => {
+          const cached = renderedPages.get(pageNum);
+          if (cached) { img.src = cached; return; }
+          try {
+            const data = await renderPageCached(pdf, pageNum, pdfUrl);
+            renderedPages.set(pageNum, data.dataUrl);
+            img.src = data.dataUrl;
+          } catch { /* non-fatal */ }
+        }).catch(() => {});
+      }
+    }, { root: thumbOverlay, rootMargin: '200px' });
+
     function addThumbItem(pages: number[], flipIdx: number): void {
       const item = document.createElement('div');
       item.className = 'thumb-item';
@@ -761,14 +863,13 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
       imgWrap.className = pages.length === 1 ? 'thumb-single' : 'thumb-spread';
       for (const pageNum of pages) {
         const img = document.createElement('img');
+        img.dataset.pageNum = String(pageNum);
         const cached = renderedPages.get(pageNum);
         if (cached) {
           img.src = cached;
         } else {
-          renderPageCached(pdf, pageNum, pdfUrl).then(data => {
-            renderedPages.set(pageNum, data.dataUrl);
-            img.src = data.dataUrl;
-          });
+          img.src = THUMB_PLACEHOLDER;
+          thumbObserver.observe(img);
         }
         imgWrap.appendChild(img);
       }
