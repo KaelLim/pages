@@ -9,7 +9,9 @@
     "build:all": "npm run build:lib && npm run build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "dev": "python3 -m http.server 8000",
+    "dev:watch": "rollup -c -w"
   },
   "devDependencies": {
     "@rollup/plugin-replace": "^6.0.0",
