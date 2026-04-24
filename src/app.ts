@@ -1,12 +1,13 @@
-import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.6.205/build/pdf.min.mjs';
+import { loadPdfJs } from './pdfjs-loader.js';
 import { extractToc, flattenToc, computeSiblingIndex, type TocItem } from './toc.js';
 import { getCachedPage, setCachedPage, buildCacheKey, evictStaleCache } from './cache.js';
 import { buildIndex as buildSearchIndex, search as runSearch, type PageIndex, type SearchMatch } from './search.js';
 import { extractLinks, resolveDestPage, type LinkInfo } from './links.js';
 
-// Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.6.205/build/pdf.worker.min.mjs';
+// Feature-detect browser capability and load the matching PDF.js line
+// (v5 → v4 → v3 → v3-legacy). Also wires up GlobalWorkerOptions.workerSrc.
+const { lib: pdfjsLib, cMapUrl: pdfCmapUrl, version: pdfjsVersion, line: pdfjsLine } = await loadPdfJs();
+console.log(`[pdf.js] loaded ${pdfjsLine} ${pdfjsVersion}`);
 
 // PDF render scale: must be >= canvas buffer DPR (2x) to avoid upscaling blur.
 // 3x ensures source image covers 2x canvas buffer at typical page widths.
@@ -174,7 +175,7 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
     loadingEl.textContent = 'Loading PDF...';
 
     const commonParams = {
-      cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.6.205/cmaps/',
+      cMapUrl: pdfCmapUrl,
       cMapPacked: true,
       rangeChunkSize: 65536,
       disableStream: false,
