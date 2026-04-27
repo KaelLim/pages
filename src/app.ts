@@ -9,9 +9,9 @@ import { extractLinks, resolveDestPage, type LinkInfo } from './links.js';
 const { lib: pdfjsLib, cMapUrl: pdfCmapUrl, version: pdfjsVersion, line: pdfjsLine } = await loadPdfJs();
 console.log(`[pdf.js] loaded ${pdfjsLine} ${pdfjsVersion}`);
 
-// Scale 2 = 1:1 pixel mapping on 2x DPR displays. Enough for Retina
-// without doubling CPU/memory cost. Zoom past 1.5x will soften slightly.
-const RENDER_SCALE = 2;
+// Scale 3 = oversample for 2x DPR with zoom headroom up to 1.5x.
+// Costs ~2.25x scale 2 on render+encode but produces sharper zoom-in.
+const RENDER_SCALE = 3;
 
 // Feature-detect WebP support once at startup.
 // WebP saves ~30-50% bandwidth/memory vs PNG with same visual quality.
@@ -308,15 +308,25 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
         const currentIdx = pageFlip.getCurrentPageIndex();
         const isPortrait = pageFlip.getOrientation() === 'portrait';
 
-        // Current spread (must render)
+        // Current spread (must render). Direction-aware: RTL flips toward smaller idx.
+        const direction = isRtl ? -1 : 1;
         const visible: number[] = [currentIdx];
         if (!isPortrait) visible.push(currentIdx + 1);
 
-        // Next spread preload (direction-aware: RTL flips toward smaller idx)
-        const direction = isRtl ? -1 : 1;
-        const stride = isPortrait ? 1 : 2;
-        const preload: number[] = [currentIdx + direction * stride];
-        if (!isPortrait) preload.push(currentIdx + direction * stride + 1);
+        // Bidirectional preload — flipping back is just as common as forward:
+        //   portrait: 1 back + 2 forward (total 4)
+        //   landscape: 1 spread back + 1 spread forward (total 6)
+        const preload: number[] = [];
+        if (isPortrait) {
+          preload.push(currentIdx - direction);       // 1 page back
+          preload.push(currentIdx + direction);       // 1 page forward
+          preload.push(currentIdx + 2 * direction);   // 2 pages forward
+        } else {
+          preload.push(currentIdx - direction * 2);     // back spread left
+          preload.push(currentIdx - direction * 2 + 1); // back spread right
+          preload.push(currentIdx + direction * 2);     // forward spread left
+          preload.push(currentIdx + direction * 2 + 1); // forward spread right
+        }
 
         for (const idx of [...visible, ...preload]) {
           if (idx < 0 || idx >= currentPageMap.length) continue;
@@ -329,15 +339,10 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
           try {
             const data = await renderPageCached(pdf, originalPage, pdfUrl);
             renderedPages.set(originalPage, data.dataUrl);
-            // User may have flipped away — only paint if still on this spread
-            const nowIdx = pageFlip.getCurrentPageIndex();
-            const nowIsPortrait = pageFlip.getOrientation() === 'portrait';
-            if (nowIdx === idx || (!nowIsPortrait && nowIdx + 1 === idx)) {
-              pageFlip.updatePageImage(idx, data.dataUrl);
-            } else if (visible.includes(idx)) {
-              // Still useful if user flipped back quickly — paint anyway
-              pageFlip.updatePageImage(idx, data.dataUrl);
-            }
+            // Always inject into StPageFlip's image array. For non-current
+            // indices this just updates the stored source so the next flip
+            // animation shows the real page instead of the placeholder.
+            pageFlip.updatePageImage(idx, data.dataUrl);
           } catch { /* non-fatal */ }
         }
       }).catch(() => {});
@@ -508,6 +513,31 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
       // Initialize timer for starting page
       currentPageForTiming = getOriginalPage();
       currentPageEnterTime = Date.now();
+
+      // Debug helper — type `__viewerDebug()` in DevTools console to dump
+      // current StPageFlip state when a page looks broken.
+      (window as unknown as { __viewerDebug: () => void }).__viewerDebug = () => {
+        if (!pageFlip) { console.log('[debug] pageFlip is null'); return; }
+        const realIdx = pageFlip.getCurrentPageIndex();
+        const pf = pageFlip as unknown as {
+          pages: {
+            getCurrentPageIndex(): number;
+            getSpread(): number[][];
+            currentSpreadIndex: number;
+            pages: { image?: { src?: string; complete?: boolean }; isLoad?: boolean }[];
+          };
+        };
+        const internalIdx = pf.pages.getCurrentPageIndex();
+        const spread = pf.pages.getSpread()[pf.pages.currentSpreadIndex];
+        const pageObj = pf.pages.pages[internalIdx];
+        console.log('[debug] real:', realIdx, 'internal:', internalIdx,
+          'spread:', spread, 'orient:', pageFlip.getOrientation(),
+          'isLoad:', pageObj?.isLoad,
+          'src:', pageObj?.image?.src?.slice(0, 80),
+          'complete:', pageObj?.image?.complete,
+          'mappedPage:', currentPageMap[realIdx],
+          'cached:', renderedPages.has(currentPageMap[realIdx] ?? -1));
+      };
     }
 
     let resizeTimer: ReturnType<typeof setTimeout>;
@@ -689,17 +719,24 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
     pageSlider.value = '1';
 
     function getOriginalPage(): number {
-      const idx = pageFlip!.getCurrentPageIndex();
-      return currentPageMap[idx] || 1;
+      const rawIdx = pageFlip!.getCurrentPageIndex();
+      // -1 = blank padding spread (StPageFlip pads odd page counts with
+      // a leading/trailing blank). Clamp into the real range.
+      const idx = Math.max(0, Math.min(rawIdx, currentPageMap.length - 1));
+      return currentPageMap[idx] ?? 1;
     }
 
     function updatePageInfo(): void {
-      const idx = pageFlip!.getCurrentPageIndex();
-      const page1 = currentPageMap[idx] || 1;
+      const rawIdx = pageFlip!.getCurrentPageIndex();
+      const idx = Math.max(0, Math.min(rawIdx, currentPageMap.length - 1));
+      const page1 = currentPageMap[idx];
+      if (!page1) return;
 
       const isPortrait = pageFlip!.getOrientation() === 'portrait';
 
-      if (!isPortrait && idx + 1 < currentPageMap.length) {
+      // Skip spread label if rawIdx was -1 (one side of the spread is the
+      // blank padding page, so only one real page is visible).
+      if (!isPortrait && rawIdx >= 0 && idx + 1 < currentPageMap.length) {
         const page2 = currentPageMap[idx + 1];
         if (page2 && page1 !== page2) {
           const lo = Math.min(page1, page2);
