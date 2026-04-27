@@ -49,7 +49,11 @@ export class CanvasRender extends Render {
         const pc = this.app.getPageCollection();
         const idx = pc.getCurrentPageIndex();
         const leftIsBlank = pc.isBlankPage(idx);
-        const rightIsBlank = pc.isBlankPage(idx + 1);
+        // In portrait, rightPage is set explicitly to the visible real page —
+        // idx+1 might be a blank padding from the next spread but is irrelevant.
+        const rightIsBlank = this.orientation === Orientation.PORTRAIT
+            ? false
+            : pc.isBlankPage(idx + 1);
 
         const isAnimating = this.flippingPage !== null;
         this.ctx.save();
