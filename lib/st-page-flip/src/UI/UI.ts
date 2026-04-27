@@ -222,12 +222,12 @@ export abstract class UI {
                     time: Date.now(),
                 };
 
-                // part of swipe detection
-                setTimeout(() => {
-                    if (this.touchPoint !== null) {
-                        this.app.startUserTouch(pos);
-                    }
-                }, this.swipeTimeout);
+                // Start user touch IMMEDIATELY so quick taps register as
+                // clicks (corner-tap → flip). The original setTimeout delay
+                // meant taps shorter than swipeTimeout never armed userStop's
+                // flip branch, blocking tap-to-flip on mobile/tablet. Swipe
+                // detection in onTouchEnd still works alongside this.
+                this.app.startUserTouch(pos);
 
                 if (!this.app.getSettings().mobileScrollSupport) e.preventDefault();
             }
