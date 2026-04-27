@@ -693,25 +693,36 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
 
     btnZoomClose.addEventListener('click', resetZoom);
 
-    // Pan drag (only when zoomed in)
-    bookArea.addEventListener('mousedown', (e: MouseEvent) => {
+    // Pan drag (only when zoomed in). Uses Pointer Events so a single
+    // handler covers mouse, touch, and stylus on tablets/phones.
+    let activePointerId: number | null = null;
+    bookArea.addEventListener('pointerdown', (e: PointerEvent) => {
       if (zoomLevel <= 1) return;
       isPanning = true;
+      activePointerId = e.pointerId;
       panStartX = e.clientX - panX;
       panStartY = e.clientY - panY;
+      bookEl.classList.add('panning');
+      (e.target as Element).setPointerCapture?.(e.pointerId);
       e.preventDefault();
     });
 
-    document.addEventListener('mousemove', (e: MouseEvent) => {
-      if (!isPanning) return;
+    bookArea.addEventListener('pointermove', (e: PointerEvent) => {
+      if (!isPanning || e.pointerId !== activePointerId) return;
       panX = e.clientX - panStartX;
       panY = e.clientY - panStartY;
       bookEl.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomLevel})`;
+      e.preventDefault();
     });
 
-    document.addEventListener('mouseup', () => {
+    function endPan(e: PointerEvent): void {
+      if (e.pointerId !== activePointerId) return;
       isPanning = false;
-    });
+      activePointerId = null;
+      bookEl.classList.remove('panning');
+    }
+    bookArea.addEventListener('pointerup', endPan);
+    bookArea.addEventListener('pointercancel', endPan);
 
     // Page slider setup
     pageSlider.min = '1';
