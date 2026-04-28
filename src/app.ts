@@ -193,7 +193,7 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
   try {
     // 1. Load PDF. PDF.js streams via HTTP range requests (only downloads
     //    what each page needs). CORS-blocked URLs fall back to proxy fetch.
-    loadingEl.textContent = 'Loading PDF...';
+    loadingEl.dataset.state = 'loading';
 
     const commonParams = {
       cMapUrl: pdfCmapUrl,
@@ -257,7 +257,7 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
       );
       if (!consent) throw new Error('PDF loading cancelled by user');
 
-      loadingEl.textContent = 'Loading via CORS proxy...';
+      loadingEl.dataset.state = 'cors-proxy';
       const proxyUrl = `${CORS_PROXY}${encodeURIComponent(pdfUrl)}`;
       const res = await fetch(proxyUrl);
       if (!res.ok) throw new Error('Failed to load PDF via proxy');
@@ -284,10 +284,15 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
     const tocTree = await extractToc(pdf).catch(() => null);
 
     // 2. Render only the first page to get dimensions
-    loadingEl.textContent = 'Rendering...';
+    loadingEl.dataset.state = 'rendering';
     const firstPage = await renderPageCached(pdf, 1, pdfUrl);
     const pageWidth = Math.round(firstPage.width);
     const pageHeight = Math.round(firstPage.height);
+    // Expose page aspect so thumbnail cells can reserve correct height
+    // before any image has loaded.
+    document.documentElement.style.setProperty(
+      '--page-aspect', String(pageWidth / pageHeight)
+    );
 
     // Page render cache: index → dataUrl (1-based)
     const renderedPages = new Map<number, string>();
@@ -542,7 +547,7 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
 
     let resizeTimer: ReturnType<typeof setTimeout>;
     window.addEventListener('resize', () => {
-      loadingEl.textContent = 'Resizing...';
+      loadingEl.dataset.state = 'resizing';
       loadingEl.classList.remove('hidden');
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
@@ -867,14 +872,10 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
 
     function buildThumbnails(): void {
       thumbGrid.innerHTML = '';
-      const total = currentPageMap.length;
-
-      for (let i = 0; i < total; i += 2) {
-        if (i + 1 < total) {
-          addThumbItem([currentPageMap[i]!, currentPageMap[i + 1]!], i);
-        } else {
-          addThumbItem([currentPageMap[i]!], i);
-        }
+      // One page per thumb on every viewport. Click jumps StPageFlip to
+      // the same flipIdx; in landscape the matching spread will open.
+      for (let i = 0; i < currentPageMap.length; i++) {
+        addThumbItem(currentPageMap[i]!, i);
       }
     }
 
@@ -902,32 +903,29 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
       }
     }, { root: thumbOverlay, rootMargin: '200px' });
 
-    function addThumbItem(pages: number[], flipIdx: number): void {
+    function addThumbItem(pageNum: number, flipIdx: number): void {
       const item = document.createElement('div');
       item.className = 'thumb-item';
-      item.dataset.pages = pages.join(',');
+      item.dataset.page = String(pageNum);
+      item.setAttribute('role', 'button');
+      item.setAttribute('aria-label', `Go to page ${pageNum}`);
 
-      const imgWrap = document.createElement('div');
-      imgWrap.className = pages.length === 1 ? 'thumb-single' : 'thumb-spread';
-      for (const pageNum of pages) {
-        const img = document.createElement('img');
-        img.dataset.pageNum = String(pageNum);
-        const cached = renderedPages.get(pageNum);
-        if (cached) {
-          img.src = cached;
-        } else {
-          img.src = THUMB_PLACEHOLDER;
-          thumbObserver.observe(img);
-        }
-        imgWrap.appendChild(img);
+      const img = document.createElement('img');
+      img.alt = '';
+      img.dataset.pageNum = String(pageNum);
+      const cached = renderedPages.get(pageNum);
+      if (cached) {
+        img.src = cached;
+      } else {
+        img.src = THUMB_PLACEHOLDER;
+        thumbObserver.observe(img);
       }
-      item.appendChild(imgWrap);
+      item.appendChild(img);
 
-      const label = document.createElement('div');
-      label.className = 'thumb-label';
-      const sorted = [...pages].sort((a, b) => a - b);
-      label.textContent = sorted.length > 1 ? `${sorted[0]}-${sorted[1]}` : String(sorted[0]);
-      item.appendChild(label);
+      const num = document.createElement('div');
+      num.className = 'thumb-num';
+      num.textContent = String(pageNum);
+      item.appendChild(num);
 
       item.addEventListener('click', () => {
         pageFlip!.turnToPage(flipIdx);
@@ -941,10 +939,21 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
     buildThumbnails();
 
     function updateThumbnailActive(): void {
-      const currentPage = String(getOriginalPage());
+      if (!pageFlip) return;
+      // In landscape, both pages of the visible spread highlight.
+      const rawIdx = pageFlip.getCurrentPageIndex();
+      const idx = Math.max(0, Math.min(rawIdx, currentPageMap.length - 1));
+      const isPortrait = pageFlip.getOrientation() === 'portrait';
+      const visible = new Set<number>();
+      const p1 = currentPageMap[idx];
+      if (p1) visible.add(p1);
+      if (!isPortrait && idx + 1 < currentPageMap.length) {
+        const p2 = currentPageMap[idx + 1];
+        if (p2) visible.add(p2);
+      }
       thumbGrid.querySelectorAll('.thumb-item').forEach((el) => {
-        const pages = (el as HTMLElement).dataset.pages?.split(',') ?? [];
-        el.classList.toggle('active', pages.includes(currentPage));
+        const page = Number((el as HTMLElement).dataset.page);
+        el.classList.toggle('active', visible.has(page));
       });
     }
 
@@ -1402,7 +1411,7 @@ async function init(pdfUrl: string = DEFAULT_PDF): Promise<void> {
     });
   } catch (err: unknown) {
     console.error('Failed to load PDF:', err);
-    loadingEl.textContent = 'Error: Failed to load PDF. Please check the file and try again.';
+    loadingEl.dataset.state = 'error';
   }
 }
 

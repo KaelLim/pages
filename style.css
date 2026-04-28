@@ -201,14 +201,44 @@ body {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
   color: #e0e0e0;
   font-family: system-ui, sans-serif;
   font-size: 1.2rem;
   z-index: 100;
 }
 
+/* Spinner = ::before; status text = ::after.
+   Both pseudo-elements stack vertically via flex on #loading. */
+#loading::before {
+  content: '';
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(255, 255, 255, 0.15);
+  border-top-color: rgba(255, 255, 255, 0.7);
+  border-radius: 50%;
+  animation: loading-spin 0.9s linear infinite;
+}
+
+#loading::after { content: 'Loading…'; }
+#loading[data-state="loading"]::after     { content: 'Loading PDF…'; }
+#loading[data-state="cors-proxy"]::after  { content: 'Loading via CORS proxy…'; }
+#loading[data-state="rendering"]::after   { content: 'Rendering…'; }
+#loading[data-state="resizing"]::after    { content: 'Resizing…'; }
+#loading[data-state="error"]::after       { content: 'Failed to load PDF. Please check the file and try again.'; }
+
+/* Stop spinning on terminal error states. */
+#loading[data-state="error"]::before { display: none; }
+
 #loading.hidden {
   display: none;
+}
+
+@keyframes loading-spin {
+  to { transform: rotate(360deg); }
 }
 
 /* ── Toolbar ── */
@@ -369,16 +399,23 @@ body {
   flex: 1;
   overflow-y: auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   gap: 12px;
   padding: 0 20px 20px;
 }
 
+/* One page per thumb. aspect-ratio (set from JS via --page-aspect)
+   locks each cell's height so active border doesn't shift layout and
+   loading placeholders reserve the right space. */
 .thumb-item {
-  cursor: pointer;
+  position: relative;
+  aspect-ratio: var(--page-aspect, 0.707);
+  background: rgba(0, 0, 0, 0.2);
+  border: 2px solid transparent;
+  box-sizing: border-box;
   border-radius: 4px;
   overflow: hidden;
-  border: 2px solid transparent;
+  cursor: pointer;
   transition: border-color 0.2s, transform 0.15s;
 }
 
@@ -391,33 +428,23 @@ body {
   border-color: #6c9bff;
 }
 
-.thumb-spread {
-  display: flex;
-}
-
-.thumb-spread img {
-  flex: 1;
-  min-width: 0;
+.thumb-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   display: block;
 }
 
-.thumb-single {
-  display: flex;
-  justify-content: center;
-}
-
-.thumb-single img {
-  width: 50%;
-  display: block;
-}
-
-.thumb-label {
-  text-align: center;
-  color: #aaa;
-  font-family: system-ui, sans-serif;
-  font-size: 0.75rem;
-  padding: 4px 0;
-  background: rgba(0, 0, 0, 0.3);
+.thumb-num {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  padding: 2px 6px;
+  font: 12px system-ui, sans-serif;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 3px;
+  pointer-events: none;
 }
 
 /* ── Password dialog (encrypted PDF) ── */
@@ -804,7 +831,7 @@ body {
   }
 
   #thumbnail-grid {
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
     gap: 8px;
     padding: 0 12px 12px;
   }
